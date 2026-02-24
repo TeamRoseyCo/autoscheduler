@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ─── Auth.js required models ───
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  tasks         Task[]
+  scheduledBlocks ScheduledBlock[]
+  preferences   Preferences?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── App models ───
+
+model Task {
+  id                  String   @id @default(cuid())
+  userId              String
+  title               String
+  durationMinutes     Int
+  deadline            DateTime?
+  priority            String   @default("medium") // high, medium, low
+  energyType          String   @default("deep")   // deep, light, admin
+  preferredTimeWindow String?  // e.g. "morning", "afternoon", "evening"
+  completed           Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduledBlocks     ScheduledBlock[]
+}
+
+model ScheduledBlock {
+  id            String   @id @default(cuid())
+  userId        String
+  taskId        String?
+  googleEventId String?
+  title         String
+  startTime     DateTime
+  endTime       DateTime
+  date          String   // YYYY-MM-DD for easy querying
+  color         String   @default("indigo")
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task          Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+}
+
+model Preferences {
+  id             String @id @default(cuid())
+  userId         String @unique
+  workStartTime  String @default("09:00") // HH:mm
+  workEndTime    String @default("17:00")
+  workDays       String @default("1,2,3,4,5") // comma-separated day numbers (1=Mon)
+  deepWorkStart  String @default("09:00")
+  deepWorkEnd    String @default("12:00")
+  breakMinutes   Int    @default(15)
+  timezone       String @default("America/New_York")
+  openaiApiKey   String?
+  openaiModel    String @default("gpt-4o-mini")
+  user           User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
