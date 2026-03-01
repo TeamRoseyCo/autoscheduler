@@ -129,48 +129,174 @@ if %errorlevel% neq 0 (
 echo.
 
 :: ========================================
-:: STEP 3: Environment config
+:: STEP 3: Google OAuth setup
 :: ========================================
-echo   ┌────────────────────────────────────┐
-echo   │  Step 3 of 5 — Configuring app    │
-echo   └────────────────────────────────────┘
+echo   ┌──────────────────────────────────────────────┐
+echo   │  Step 3 of 5 — Google Sign-In Setup          │
+echo   └──────────────────────────────────────────────┘
 echo.
 
-if not exist ".env.local" (
-    if exist ".env.template" (
-        echo     Setting up configuration...
-        echo.
-        echo     You need Google OAuth credentials to sign in.
-        echo     Ask whoever shared this app for the Client ID and Secret.
-        echo.
-        set /p "OAUTH_ID=     Google Client ID: "
-        set /p "OAUTH_SECRET=     Google Client Secret: "
-        echo.
-
-        :: Generate a random AUTH_SECRET
-        for /f "delims=" %%s in ('powershell -Command "[Convert]::ToHexString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).ToLower()"') do set "AUTH_SECRET=%%s"
-
-        :: Build .env.local with real values
-        powershell -Command ^
-            "$content = Get-Content '.env.template';" ^
-            "$content = $content -replace 'your-google-client-id-here', '!OAUTH_ID!';" ^
-            "$content = $content -replace 'your-google-client-secret-here', '!OAUTH_SECRET!';" ^
-            "$content = $content -replace 'PLACEHOLDER', '!AUTH_SECRET!';" ^
-            "$content | Set-Content '.env.local'"
-
-        echo     Done! Configuration created.
-    ) else (
-        color 0E
-        echo     WARNING: No .env.template found.
-        echo     Ask the person who shared this app for the .env.template file.
-        echo.
-        pause
-        exit /b 1
-    )
-) else (
-    echo     Configuration already set up.
+if exist ".env.local" (
+    echo     Google credentials already set up.
+    echo.
+    goto :step4
 )
+
+if not exist ".env.template" (
+    color 0C
+    echo     ERROR: Missing .env.template file.
+    echo     Re-download the app from GitHub and try again.
+    echo.
+    pause
+    exit /b 1
+)
+
+cls
 echo.
+echo   ════════════════════════════════════════════════════
+echo    Step 3 of 5 — Google Sign-In Setup
+echo   ════════════════════════════════════════════════════
+echo.
+echo   AutoScheduler uses Google to sign you in and sync
+echo   your calendar. This takes about 5 minutes and is
+echo   completely free.
+echo.
+echo   We'll open your browser at each step. Just follow
+echo   the instructions on screen, then come back here
+echo   and press any key to continue.
+echo.
+echo   Press any key to begin...
+pause >nul
+
+:: --- SUB-STEP A: Create project ---
+cls
+echo.
+echo   ┌────────────────────────────────────────────────┐
+echo   │  3a — Create a Google Cloud Project            │
+echo   └────────────────────────────────────────────────┘
+echo.
+echo   1. Your browser will open to Google Cloud Console
+echo   2. Sign in with your Google account if asked
+echo   3. Fill in the form:
+echo        Project name:  AutoScheduler
+echo        (everything else can stay as-is)
+echo   4. Click CREATE and wait for it to finish
+echo.
+echo   Press any key to open the browser...
+pause >nul
+start "" "https://console.cloud.google.com/projectcreate"
+echo.
+echo   Done creating the project? Press any key to continue...
+pause >nul
+
+:: --- SUB-STEP B: Enable Calendar API ---
+cls
+echo.
+echo   ┌────────────────────────────────────────────────┐
+echo   │  3b — Enable the Google Calendar API           │
+echo   └────────────────────────────────────────────────┘
+echo.
+echo   1. Your browser will open to the Calendar API page
+echo   2. Make sure your "AutoScheduler" project is selected
+echo      at the top of the page
+echo   3. Click the blue ENABLE button
+echo.
+echo   Press any key to open the browser...
+pause >nul
+start "" "https://console.cloud.google.com/apis/library/calendar-json.googleapis.com"
+echo.
+echo   Done enabling the Calendar API? Press any key to continue...
+pause >nul
+
+:: --- SUB-STEP C: OAuth consent screen ---
+cls
+echo.
+echo   ┌────────────────────────────────────────────────┐
+echo   │  3c — Set Up the Sign-In Screen                │
+echo   └────────────────────────────────────────────────┘
+echo.
+echo   1. Your browser will open to the OAuth consent screen
+echo   2. If asked to choose, select: External
+echo      Then click CREATE
+echo   3. Fill in:
+echo        App name:        AutoScheduler
+echo        User support email: (your email)
+echo        Developer contact: (your email)
+echo   4. Click SAVE AND CONTINUE three times to skip through
+echo      the rest of the screens
+echo   5. On the last screen, click BACK TO DASHBOARD
+echo.
+echo   Press any key to open the browser...
+pause >nul
+start "" "https://console.cloud.google.com/apis/credentials/consent"
+echo.
+echo   Done with the sign-in screen? Press any key to continue...
+pause >nul
+
+:: --- SUB-STEP D: Create credentials ---
+cls
+echo.
+echo   ┌────────────────────────────────────────────────┐
+echo   │  3d — Create OAuth Credentials                 │
+echo   └────────────────────────────────────────────────┘
+echo.
+echo   1. Your browser will open to the Credentials page
+echo   2. Click: + CREATE CREDENTIALS
+echo   3. Choose: OAuth client ID
+echo   4. Under Application type, choose: Web application
+echo   5. Name it anything (e.g. AutoScheduler)
+echo   6. Under "Authorized redirect URIs", click ADD URI
+echo      and paste this exactly:
+echo.
+echo        http://localhost:3000/api/auth/callback/google
+echo.
+echo   7. Click CREATE
+echo   8. A popup will show your Client ID and Client Secret
+echo      -- DON'T CLOSE IT YET, you'll paste them next --
+echo.
+echo   Press any key to open the browser...
+pause >nul
+start "" "https://console.cloud.google.com/apis/credentials"
+echo.
+echo   Can you see your Client ID and Client Secret in the popup?
+echo   Press any key to continue...
+pause >nul
+
+:: --- SUB-STEP E: Paste credentials ---
+cls
+echo.
+echo   ┌────────────────────────────────────────────────┐
+echo   │  3e — Paste Your Credentials Here              │
+echo   └────────────────────────────────────────────────┘
+echo.
+echo   Copy and paste from the Google popup.
+echo   (Right-click to paste if Ctrl+V doesn't work)
+echo.
+set /p "OAUTH_ID=   Client ID:     "
+set /p "OAUTH_SECRET=   Client Secret: "
+echo.
+
+:: Generate a random AUTH_SECRET
+for /f "delims=" %%s in ('powershell -Command "[Convert]::ToHexString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).ToLower()"') do set "AUTH_SECRET=%%s"
+
+:: Build .env.local with real values
+powershell -Command ^
+    "$content = Get-Content '.env.template';" ^
+    "$content = $content -replace 'your-google-client-id-here', '!OAUTH_ID!';" ^
+    "$content = $content -replace 'your-google-client-secret-here', '!OAUTH_SECRET!';" ^
+    "$content = $content -replace 'PLACEHOLDER', '!AUTH_SECRET!';" ^
+    "$content | Set-Content '.env.local'"
+
+cls
+echo.
+echo   ┌────────────────────────────────────────────────┐
+echo   │  Google credentials saved!                     │
+echo   └────────────────────────────────────────────────┘
+echo.
+echo   Continuing setup...
+echo.
+
+:step4
 
 :: ========================================
 :: STEP 4: Dependencies + Database
