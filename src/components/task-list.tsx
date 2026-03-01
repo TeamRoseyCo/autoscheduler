@@ -39,7 +39,7 @@ export function TaskList({
                 : "text-gray-600 hover:text-gray-900"
             }`}
           >
-            Completed ({completedTasks.length})
+            Done ({completedTasks.length})
           </button>
         </div>
         <button

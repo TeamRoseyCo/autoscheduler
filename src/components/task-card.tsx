@@ -1,27 +1,127 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { toggleTask, deleteTask } from "@/lib/actions/tasks";
+import { useState, useTransition, useRef, useEffect } from "react";
+import { setTaskStatus, deleteTask } from "@/lib/actions/tasks";
 import { TaskForm } from "@/components/task-form";
 import { formatDuration, getColorClasses } from "@/lib/utils";
-import type { Task } from "@/generated/prisma/client";
+import type { Task, Project } from "@/generated/prisma/client";
 
-const priorityBadge: Record<string, string> = {
+type TaskWithProject = Task & {
+  project?: Pick<Project, "id" | "name" | "color"> | null;
+};
+
+type TaskStatus = "todo" | "in_progress" | "completed" | "cancelled" | "blocked";
+
+const STATUS_CONFIG: Record<TaskStatus, { label: string; icon: string; className: string; menuClass: string }> = {
+  todo: {
+    label: "To Do",
+    icon: "○",
+    className: "text-gray-400",
+    menuClass: "hover:bg-gray-50 text-gray-700",
+  },
+  in_progress: {
+    label: "In Progress",
+    icon: "◑",
+    className: "text-blue-500",
+    menuClass: "hover:bg-blue-50 text-blue-700",
+  },
+  completed: {
+    label: "Completed",
+    icon: "✓",
+    className: "text-green-500",
+    menuClass: "hover:bg-green-50 text-green-700",
+  },
+  cancelled: {
+    label: "Cancelled",
+    icon: "✕",
+    className: "text-red-400",
+    menuClass: "hover:bg-red-50 text-red-600",
+  },
+  blocked: {
+    label: "Blocked",
+    icon: "◉",
+    className: "text-orange-500",
+    menuClass: "hover:bg-orange-50 text-orange-700",
+  },
+};
+
+const PRIORITY_BADGE: Record<string, string> = {
+  asap: "bg-red-100 text-red-700 ring-1 ring-red-400",
   high: "bg-red-100 text-red-700",
   medium: "bg-yellow-100 text-yellow-700",
   low: "bg-blue-100 text-blue-700",
 };
 
-export function TaskCard({ task }: { task: Task }) {
+const PROJECT_DOT: Record<string, string> = {
+  indigo: "bg-indigo-400",
+  emerald: "bg-emerald-400",
+  amber: "bg-amber-400",
+  gray: "bg-slate-400",
+  rose: "bg-rose-400",
+  cyan: "bg-cyan-400",
+  violet: "bg-violet-400",
+  orange: "bg-orange-400",
+};
+
+function StatusPicker({ currentStatus, taskId }: { currentStatus: TaskStatus; taskId: string }) {
+  const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  const cfg = STATUS_CONFIG[currentStatus] ?? STATUS_CONFIG.todo;
+
+  return (
+    <div ref={ref} className="relative flex-shrink-0">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        disabled={isPending}
+        title={cfg.label}
+        className={`text-lg leading-none transition-opacity ${cfg.className} ${isPending ? "opacity-40" : "hover:opacity-70"}`}
+      >
+        {cfg.icon}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-6 z-20 w-36 bg-white border border-gray-200 rounded-lg shadow-lg py-1">
+          {(Object.keys(STATUS_CONFIG) as TaskStatus[]).map((s) => {
+            const c = STATUS_CONFIG[s];
+            return (
+              <button
+                key={s}
+                onClick={() => {
+                  setOpen(false);
+                  startTransition(() => setTaskStatus(taskId, s));
+                }}
+                className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors ${c.menuClass} ${s === currentStatus ? "font-semibold" : ""}`}
+              >
+                <span className={c.className}>{c.icon}</span>
+                {c.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function TaskCard({ task }: { task: TaskWithProject }) {
   const [editing, setEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
 
+  const status = (task.taskStatus as TaskStatus) ?? "todo";
+  const isDone = status === "completed" || status === "cancelled";
+
   const colors = getColorClasses(
-    task.energyType === "deep"
-      ? "indigo"
-      : task.energyType === "light"
-      ? "emerald"
-      : "amber"
+    task.energyType === "deep" ? "indigo" : task.energyType === "light" ? "emerald" : "amber"
   );
 
   if (editing) {
@@ -33,48 +133,33 @@ export function TaskCard({ task }: { task: Task }) {
   }
 
   return (
-    <div
-      className={`rounded-lg border-l-4 ${colors.border} bg-white p-4 shadow-sm`}
-    >
+    <div className={`rounded-lg border-l-4 ${colors.border} bg-white p-4 shadow-sm`}>
       <div className="flex items-start gap-3">
-        <input
-          type="checkbox"
-          checked={task.completed}
-          onChange={() => startTransition(() => toggleTask(task.id))}
-          className="mt-1 h-4 w-4 rounded accent-indigo-600"
-        />
+        <StatusPicker currentStatus={status} taskId={task.id} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span
-              className={`text-sm font-medium ${
-                task.completed ? "line-through text-gray-400" : "text-gray-900"
-              }`}
-            >
+            <span className={`text-sm font-medium ${isDone ? "line-through text-gray-400" : "text-gray-900"}`}>
               {task.title}
             </span>
-            <span
-              className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                priorityBadge[task.priority]
-              }`}
-            >
-              {task.priority}
-            </span>
-            <span
-              className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${colors.bg} ${colors.text}`}
-            >
+            {task.priority && (
+              <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_BADGE[task.priority] ?? PRIORITY_BADGE.medium}`}>
+                {task.priority === "asap" ? "ASAP" : task.priority}
+              </span>
+            )}
+            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${colors.bg} ${colors.text}`}>
               {task.energyType}
             </span>
+            {task.project && (
+              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600">
+                <span className={`w-2 h-2 rounded-full ${PROJECT_DOT[task.project.color] || "bg-gray-400"}`} />
+                {task.project.name}
+              </span>
+            )}
           </div>
           <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
             <span>{formatDuration(task.durationMinutes)}</span>
-            {task.deadline && (
-              <span>
-                Due {new Date(task.deadline).toLocaleDateString()}
-              </span>
-            )}
-            {task.preferredTimeWindow && (
-              <span>{task.preferredTimeWindow}</span>
-            )}
+            {task.deadline && <span>Due {new Date(task.deadline).toLocaleDateString()}</span>}
+            {task.preferredTimeWindow && <span>{task.preferredTimeWindow}</span>}
           </div>
         </div>
         <div className="flex gap-1">

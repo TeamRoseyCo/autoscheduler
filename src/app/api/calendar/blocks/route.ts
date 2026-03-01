@@ -36,6 +36,15 @@ export async function GET(request: NextRequest) {
         lte: endDate,
       },
     },
+    include: {
+      task: {
+        select: {
+          metric: {
+            select: { id: true, name: true, unit: true, icon: true },
+          },
+        },
+      },
+    },
     orderBy: { startTime: "asc" },
   });
 

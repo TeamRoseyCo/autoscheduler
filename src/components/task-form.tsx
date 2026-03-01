@@ -1,28 +1,94 @@
 "use client";
 
-import { useActionState, useRef } from "react";
+import { useActionState, useRef, useEffect, useState } from "react";
 import { createTask, updateTask } from "@/lib/actions/tasks";
 import type { Task } from "@/generated/prisma/client";
+import type { ProjectWithCounts } from "@/lib/actions/projects";
+import { CATEGORY_LABELS } from "@/lib/preset-metrics";
 
 const DURATION_PRESETS = [15, 30, 45, 60, 90, 120];
+
+interface MetricOption {
+  id: string;
+  name: string;
+  unit: string;
+  icon: string;
+  category: string;
+}
+
+interface TaskWithMetric extends Task {
+  metric?: { id: string; name: string; unit: string; icon: string } | null;
+}
 
 export function TaskForm({
   task,
   onDone,
 }: {
-  task?: Task;
+  task?: TaskWithMetric;
   onDone?: () => void;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
+  const [projects, setProjects] = useState<ProjectWithCounts[]>([]);
+  const [metrics, setMetrics] = useState<MetricOption[]>([]);
+  const [selectedMetric, setSelectedMetric] = useState<MetricOption | null>(
+    task?.metric ? { ...task.metric, category: "" } : null
+  );
+  const [isSuggestingMetric, setIsSuggestingMetric] = useState(false);
+  const [titleValue, setTitleValue] = useState(task?.title ?? "");
+
+  useEffect(() => {
+    fetch("/api/projects")
+      .then((res) => res.ok ? res.json() : [])
+      .then(setProjects)
+      .catch(() => {});
+
+    fetch("/api/metrics")
+      .then((res) => res.ok ? res.json() : [])
+      .then(setMetrics)
+      .catch(() => {});
+  }, []);
+
+  const handleAutoDetect = async () => {
+    if (!titleValue.trim()) return;
+    setIsSuggestingMetric(true);
+    try {
+      const res = await fetch("/api/metrics/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: titleValue }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.metric) setSelectedMetric(data.metric);
+      }
+    } finally {
+      setIsSuggestingMetric(false);
+    }
+  };
+
+  // Group metrics by category for the select
+  const metricsByCategory = metrics.reduce<Record<string, MetricOption[]>>((acc, m) => {
+    if (!acc[m.category]) acc[m.category] = [];
+    acc[m.category].push(m);
+    return acc;
+  }, {});
 
   const [state, formAction, isPending] = useActionState(
     async (_prev: { error?: string } | null, formData: FormData) => {
+      // Inject selected metric id into form data
+      if (selectedMetric) {
+        formData.set("metricId", selectedMetric.id);
+      } else {
+        formData.delete("metricId");
+      }
       try {
         if (task) {
           await updateTask(task.id, formData);
         } else {
           await createTask(formData);
           formRef.current?.reset();
+          setSelectedMetric(null);
+          setTitleValue("");
         }
         onDone?.();
         return null;
@@ -45,14 +111,26 @@ export function TaskForm({
         <label className="block text-sm font-medium text-gray-700">
           Title
         </label>
-        <input
-          type="text"
-          name="title"
-          required
-          defaultValue={task?.title || ""}
-          placeholder="What needs to be done?"
-          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-        />
+        <div className="mt-1 flex gap-2">
+          <input
+            type="text"
+            name="title"
+            required
+            value={titleValue}
+            onChange={(e) => setTitleValue(e.target.value)}
+            placeholder="What needs to be done?"
+            className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+          />
+          <button
+            type="button"
+            onClick={handleAutoDetect}
+            disabled={isSuggestingMetric || !titleValue.trim()}
+            title="Auto-detect metric from title"
+            className="flex-shrink-0 rounded-md border border-gray-300 px-2.5 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40"
+          >
+            {isSuggestingMetric ? "..." : "✨"}
+          </button>
+        </div>
       </div>
 
       <div>
@@ -114,6 +192,7 @@ export function TaskForm({
             defaultValue={task?.priority || "medium"}
             className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
           >
+            <option value="asap">ASAP</option>
             <option value="high">High</option>
             <option value="medium">Medium</option>
             <option value="low">Low</option>
@@ -151,6 +230,65 @@ export function TaskForm({
             <option value="evening">Evening</option>
           </select>
         </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">
+          Project
+        </label>
+        <select
+          name="projectId"
+          defaultValue={task?.projectId || ""}
+          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+        >
+          <option value="">No project</option>
+          {projects.filter((p) => p.status === "active").map((p) => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Metric picker */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700">
+          Track Metric
+        </label>
+        {selectedMetric ? (
+          <div className="mt-1 flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 border border-indigo-200 px-3 py-1 text-sm text-indigo-700">
+              <span>{selectedMetric.icon}</span>
+              <span>{selectedMetric.name}</span>
+              <span className="text-indigo-400">({selectedMetric.unit})</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedMetric(null)}
+              className="text-gray-400 hover:text-gray-600 text-xs"
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <select
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            value=""
+            onChange={(e) => {
+              const m = metrics.find((m) => m.id === e.target.value);
+              if (m) setSelectedMetric(m);
+            }}
+          >
+            <option value="">No metric</option>
+            {Object.entries(metricsByCategory).map(([cat, mets]) => (
+              <optgroup key={cat} label={CATEGORY_LABELS[cat] ?? cat}>
+                {mets.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.icon} {m.name} ({m.unit})
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        )}
       </div>
 
       <div className="flex gap-2">

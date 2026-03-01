@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getGoogleCalendarClient } from "@/lib/google-auth";
+import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -42,29 +43,52 @@ export async function GET(request: NextRequest) {
       maxResults: 250,
     });
 
-    const events = (response.data.items || [])
-      .filter((event) => {
-        // Skip all-day events (no dateTime) and cancelled events
-        if (!event.start?.dateTime || !event.end?.dateTime) return false;
-        if (event.status === "cancelled") return false;
-        return true;
-      })
-      .map((event) => {
-        const start = new Date(event.start!.dateTime!);
-        const end = new Date(event.end!.dateTime!);
-        const dateStr = start.toISOString().split("T")[0];
+    const rawEvents = (response.data.items || []).filter((event) => {
+      if (!event.start?.dateTime || !event.end?.dateTime) return false;
+      if (event.status === "cancelled") return false;
+      return true;
+    });
 
-        return {
-          id: `google-${event.id}`,
-          googleEventId: event.id,
-          title: event.summary || "(No title)",
-          startTime: start.toISOString(),
-          endTime: end.toISOString(),
-          date: dateStr,
-          color: "gray",
-          source: "google" as const,
-        };
-      });
+    // Fetch any saved transport data for these events in one query (non-fatal)
+    const googleEventIds = rawEvents.map((e) => e.id!).filter(Boolean);
+    let transportMap = new Map<string, { location: string | null; transportBefore: number | null; transportAfter: number | null; transportMode: string | null }>();
+    try {
+      const transportRecords = googleEventIds.length > 0
+        ? await prisma.googleEventTransport.findMany({
+            where: { userId: session.user.id, googleEventId: { in: googleEventIds } },
+          })
+        : [];
+      transportMap = new Map(transportRecords.map((r) => [r.googleEventId, r]));
+    } catch {
+      // Transport data unavailable — proceed without it (server restart may be needed after schema change)
+    }
+
+    const events = rawEvents.map((event) => {
+      const start = new Date(event.start!.dateTime!);
+      const end = new Date(event.end!.dateTime!);
+      const dateStr = start.toISOString().split("T")[0];
+      const transparency = (event as { transparency?: string }).transparency;
+      const availability = transparency === "transparent" ? "free" : "busy";
+      const transport = transportMap.get(event.id!);
+
+      return {
+        id: `google-${event.id}`,
+        googleEventId: event.id,
+        title: event.summary || "(No title)",
+        startTime: start.toISOString(),
+        endTime: end.toISOString(),
+        date: dateStr,
+        color: "gray",
+        source: "google" as const,
+        availability,
+        ...(transport && {
+          location: transport.location ?? undefined,
+          transportBefore: transport.transportBefore ?? undefined,
+          transportAfter: transport.transportAfter ?? undefined,
+          transportMode: transport.transportMode ?? undefined,
+        }),
+      };
+    });
 
     return NextResponse.json(events);
   } catch (error: unknown) {

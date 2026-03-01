@@ -3,11 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
+import { ProjectListSidebar } from "@/components/project-list-sidebar";
+import type { ProjectWithCounts } from "@/lib/actions/projects";
 
 interface LeftSidebarProps {
   collapsed?: boolean;
   onToggle?: () => void;
   onSearchClick?: () => void;
+  projects?: ProjectWithCounts[];
+  onAddProjectClick?: () => void;
+  onAIProjectClick?: () => void;
+  onProjectClick?: (projectId: string) => void;
+  onProjectContextMenu?: (projectId: string, x: number, y: number) => void;
 }
 
 function todayLabel(): string {
@@ -94,6 +101,14 @@ const TasksIcon = (
   </svg>
 );
 
+const StatsIcon = (
+  <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+    <rect x="2" y="10" width="3" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
+    <rect x="7.5" y="6" width="3" height="10" rx="1" stroke="currentColor" strokeWidth="1.5" />
+    <rect x="13" y="2" width="3" height="14" rx="1" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+);
+
 const SettingsIcon = (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
     <circle cx="9" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.5" />
@@ -101,7 +116,16 @@ const SettingsIcon = (
   </svg>
 );
 
-export function LeftSidebar({ collapsed = false, onToggle, onSearchClick }: LeftSidebarProps) {
+export function LeftSidebar({
+  collapsed = false,
+  onToggle,
+  onSearchClick,
+  projects = [],
+  onAddProjectClick,
+  onAIProjectClick,
+  onProjectClick,
+  onProjectContextMenu,
+}: LeftSidebarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
 
@@ -111,7 +135,6 @@ export function LeftSidebar({ collapsed = false, onToggle, onSearchClick }: Left
   if (collapsed) {
     return (
       <aside className="w-14 flex-shrink-0 bg-[#16161f] border-r border-[#2a2a3c] flex flex-col h-full select-none transition-all duration-200">
-        {/* Header - expand button */}
         <div className="flex items-center justify-center px-1 py-3 border-b border-[#2a2a3c]">
           <button
             onClick={onToggle}
@@ -125,32 +148,13 @@ export function LeftSidebar({ collapsed = false, onToggle, onSearchClick }: Left
           </button>
         </div>
 
-        {/* Navigation Icons */}
         <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
-          <SidebarLink
-            href="/"
-            icon={CalendarIcon}
-            label="Calendar"
-            active={pathname === "/"}
-            collapsed
-          />
-          <SidebarLink
-            href="/tasks"
-            icon={TasksIcon}
-            label="Tasks"
-            active={pathname === "/tasks"}
-            collapsed
-          />
-          <SidebarLink
-            href="/settings"
-            icon={SettingsIcon}
-            label="Settings"
-            active={pathname === "/settings"}
-            collapsed
-          />
+          <SidebarLink href="/" icon={CalendarIcon} label="Calendar" active={pathname === "/"} collapsed />
+          <SidebarLink href="/tasks" icon={TasksIcon} label="Tasks" active={pathname === "/tasks"} collapsed />
+          <SidebarLink href="/stats" icon={StatsIcon} label="Stats" active={pathname === "/stats"} collapsed />
+          <SidebarLink href="/settings" icon={SettingsIcon} label="Settings" active={pathname === "/settings"} collapsed />
         </nav>
 
-        {/* Footer - sign out icon */}
         <div className="border-t border-[#2a2a3c] px-2 py-2">
           <button
             onClick={() => signOut()}
@@ -230,14 +234,30 @@ export function LeftSidebar({ collapsed = false, onToggle, onSearchClick }: Left
         />
 
         <SidebarLink
+          href="/stats"
+          icon={StatsIcon}
+          label="Stats"
+          active={pathname === "/stats"}
+        />
+
+        <SidebarLink
           href="/settings"
           icon={SettingsIcon}
           label="Settings"
           active={pathname === "/settings"}
         />
 
+        {/* Projects section */}
+        <ProjectListSidebar
+          projects={projects}
+          onAddClick={onAddProjectClick || (() => {})}
+          onAIClick={onAIProjectClick || (() => {})}
+          onProjectClick={onProjectClick}
+          onProjectContextMenu={onProjectContextMenu}
+        />
+
         {/* Legend section */}
-        <div className="pt-6 pb-1">
+        <div className="pt-4 pb-1">
           <p className="px-3 text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
             Color Legend
           </p>

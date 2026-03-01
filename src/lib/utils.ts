@@ -49,6 +49,26 @@ export function getColorClasses(color: string): {
       border: "border-gray-400",
       text: "text-gray-800",
     },
+    rose: {
+      bg: "bg-rose-100",
+      border: "border-rose-400",
+      text: "text-rose-800",
+    },
+    cyan: {
+      bg: "bg-cyan-100",
+      border: "border-cyan-400",
+      text: "text-cyan-800",
+    },
+    violet: {
+      bg: "bg-violet-100",
+      border: "border-violet-400",
+      text: "text-violet-800",
+    },
+    orange: {
+      bg: "bg-orange-100",
+      border: "border-orange-400",
+      text: "text-orange-800",
+    },
   };
   return colors[color] || colors.gray;
 }

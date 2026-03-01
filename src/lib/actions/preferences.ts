@@ -12,8 +12,11 @@ const preferencesSchema = z.object({
   deepWorkEnd: z.string().regex(/^\d{2}:\d{2}$/),
   breakMinutes: z.coerce.number().int().min(0).max(60),
   timezone: z.string().min(1),
+  aiProvider: z.string().min(1).default("gemini"),
   openaiApiKey: z.string().optional().default(""),
   openaiModel: z.string().min(1),
+  googleMapsApiKey: z.string().optional().default(""),
+  savedPlaces: z.string().optional().default("[]"),
 });
 
 export async function getPreferences() {

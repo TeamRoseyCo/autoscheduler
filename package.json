@@ -1,12 +1,43 @@
 {
-  "name": "calendar-app",
-  "version": "0.1.0",
+  "name": "auto-scheduler",
+  "version": "1.0.0",
   "private": true,
+  "main": "electron/main.js",
+  "author": "AutoScheduler",
+  "description": "AI-powered calendar scheduling assistant",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "electron": "electron .",
+    "electron:dev": "electron .",
+    "dist": "next build && electron-builder",
+    "dist:win": "next build && electron-builder --win",
+    "postinstall": "npx prisma generate"
+  },
+  "build": {
+    "appId": "com.autoscheduler.app",
+    "productName": "AutoScheduler",
+    "npmRebuild": false,
+    "asar": false,
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "electron/**/*",
+      "public/**/*",
+      ".next/**/*",
+      "node_modules/**/*",
+      "package.json",
+      "next.config.*",
+      "prisma/**/*",
+      ".env*"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "public/icon.ico"
+    }
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
@@ -20,6 +51,7 @@
     "openai": "^6.24.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "recharts": "^3.7.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -28,6 +60,8 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "electron": "^40.6.1",
+    "electron-builder": "^26.8.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "prisma": "^7.4.1",

@@ -9,7 +9,12 @@ interface CreateEventBody {
   startTime: string;
   endTime: string;
   color?: string;
+  availability?: string;
   addToGoogle?: boolean;
+  location?: string;
+  transportBefore?: number;
+  transportAfter?: number;
+  transportMode?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -70,7 +75,12 @@ export async function POST(request: NextRequest) {
         startTime,
         endTime,
         color: body.color || "indigo",
+        availability: body.availability || "busy",
         googleEventId,
+        location: body.location || null,
+        transportBefore: body.transportBefore ?? null,
+        transportAfter: body.transportAfter ?? null,
+        transportMode: body.transportMode || null,
       },
     });
 

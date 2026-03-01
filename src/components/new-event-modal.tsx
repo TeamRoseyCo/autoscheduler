@@ -1,12 +1,17 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { categorizeTask } from "@/lib/categorize";
+import { EmojiPicker } from "@/components/emoji-picker";
+import { DescriptionWand } from "@/components/description-wand";
 
 interface NewEventModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreated: () => void;
   defaultDate?: string; // YYYY-MM-DD
+  defaultStartTime?: string; // HH:mm
+  defaultEndTime?: string; // HH:mm
 }
 
 const COLOR_OPTIONS = [
@@ -15,6 +20,12 @@ const COLOR_OPTIONS = [
   { value: "amber", label: "Admin", bg: "bg-amber-500", ring: "ring-amber-400" },
   { value: "gray", label: "Other", bg: "bg-slate-500", ring: "ring-slate-400" },
 ];
+
+const ENERGY_TO_COLOR: Record<string, string> = {
+  deep: "indigo",
+  light: "emerald",
+  admin: "amber",
+};
 
 function getDefaultTimes(): { startTime: string; endTime: string } {
   const now = new Date();
@@ -33,35 +44,16 @@ function getTodayStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-// Generate time options in 15-minute increments
-function generateTimeOptions(): string[] {
-  const options: string[] = [];
-  for (let h = 0; h < 24; h++) {
-    for (let m = 0; m < 60; m += 15) {
-      options.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
-    }
-  }
-  return options;
-}
 
-function formatTimeLabel(time: string): string {
-  const [hStr, mStr] = time.split(":");
-  const h = parseInt(hStr, 10);
-  const m = mStr;
-  const ampm = h >= 12 ? "PM" : "AM";
-  const hour = h % 12 || 12;
-  return m === "00" ? `${hour} ${ampm}` : `${hour}:${m} ${ampm}`;
-}
-
-const TIME_OPTIONS = generateTimeOptions();
-
-export function NewEventModal({ isOpen, onClose, onCreated, defaultDate }: NewEventModalProps) {
+export function NewEventModal({ isOpen, onClose, onCreated, defaultDate, defaultStartTime, defaultEndTime }: NewEventModalProps) {
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(defaultDate || getTodayStr());
   const defaults = getDefaultTimes();
-  const [startTime, setStartTime] = useState(defaults.startTime);
-  const [endTime, setEndTime] = useState(defaults.endTime);
+  const [startTime, setStartTime] = useState(defaultStartTime || defaults.startTime);
+  const [endTime, setEndTime] = useState(defaultEndTime || defaults.endTime);
   const [color, setColor] = useState("indigo");
+  const [availability, setAvailability] = useState("busy");
+  const [description, setDescription] = useState("");
   const [addToGoogle, setAddToGoogle] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -73,17 +65,28 @@ export function NewEventModal({ isOpen, onClose, onCreated, defaultDate }: NewEv
     if (isOpen) {
       setTitle("");
       setDate(defaultDate || getTodayStr());
-      const d = getDefaultTimes();
-      setStartTime(d.startTime);
-      setEndTime(d.endTime);
+      if (defaultStartTime) {
+        setStartTime(defaultStartTime);
+      } else {
+        const d = getDefaultTimes();
+        setStartTime(d.startTime);
+      }
+      if (defaultEndTime) {
+        setEndTime(defaultEndTime);
+      } else {
+        const d = getDefaultTimes();
+        setEndTime(d.endTime);
+      }
       setColor("indigo");
+      setAvailability("busy");
+      setDescription("");
       setAddToGoogle(false);
       setError("");
       setSubmitting(false);
       // Focus title input after a small delay for animation
       setTimeout(() => titleInputRef.current?.focus(), 50);
     }
-  }, [isOpen, defaultDate]);
+  }, [isOpen, defaultDate, defaultStartTime, defaultEndTime]);
 
   // Escape key to close
   useEffect(() => {
@@ -101,6 +104,25 @@ export function NewEventModal({ isOpen, onClose, onCreated, defaultDate }: NewEv
     },
     [onClose]
   );
+
+  const handleTitleBlur = () => {
+    if (!title.trim()) return;
+    const result = categorizeTask(title);
+    // Auto-set color based on category
+    setColor(ENERGY_TO_COLOR[result.energyType] || "gray");
+    // Prepend emoji if title doesn't already start with one
+    const firstChar = title.codePointAt(0) || 0;
+    const isEmoji = firstChar > 0x1F000;
+    if (!isEmoji) {
+      setTitle(`${result.emoji} ${title}`);
+    }
+  };
+
+  const handleEmojiSelect = (emoji: string) => {
+    const stripped = title.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}]\uFE0F?\s*/u, "");
+    setTitle(`${emoji} ${stripped}`);
+    titleInputRef.current?.focus();
+  };
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -130,7 +152,9 @@ export function NewEventModal({ isOpen, onClose, onCreated, defaultDate }: NewEv
             startTime: startISO,
             endTime: endISO,
             color,
+            availability,
             addToGoogle,
+            description: description.trim() || undefined,
           }),
         });
 
@@ -147,7 +171,7 @@ export function NewEventModal({ isOpen, onClose, onCreated, defaultDate }: NewEv
         setSubmitting(false);
       }
     },
-    [title, date, startTime, endTime, color, addToGoogle, onCreated, onClose]
+    [title, date, startTime, endTime, color, availability, addToGoogle, onCreated, onClose]
   );
 
   if (!isOpen) return null;
@@ -177,17 +201,21 @@ export function NewEventModal({ isOpen, onClose, onCreated, defaultDate }: NewEv
           </button>
         </div>
 
-        {/* Title */}
+        {/* Title with emoji picker */}
         <div>
           <label className="block text-xs font-medium text-gray-400 mb-1.5">Title</label>
-          <input
-            ref={titleInputRef}
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Event name..."
-            className="w-full rounded-lg bg-[#12121c] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 transition-colors"
-          />
+          <div className="flex items-center gap-1">
+            <EmojiPicker onSelect={handleEmojiSelect} />
+            <input
+              ref={titleInputRef}
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={handleTitleBlur}
+              placeholder="Event name..."
+              className="flex-1 rounded-lg bg-[#12121c] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 transition-colors"
+            />
+          </div>
         </div>
 
         {/* Date */}
@@ -205,32 +233,37 @@ export function NewEventModal({ isOpen, onClose, onCreated, defaultDate }: NewEv
         <div className="flex gap-3">
           <div className="flex-1">
             <label className="block text-xs font-medium text-gray-400 mb-1.5">Start Time</label>
-            <select
+            <input
+              type="time"
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
               className="w-full rounded-lg bg-[#12121c] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 transition-colors [color-scheme:dark]"
-            >
-              {TIME_OPTIONS.map((t) => (
-                <option key={t} value={t}>
-                  {formatTimeLabel(t)}
-                </option>
-              ))}
-            </select>
+            />
           </div>
           <div className="flex-1">
             <label className="block text-xs font-medium text-gray-400 mb-1.5">End Time</label>
-            <select
+            <input
+              type="time"
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
               className="w-full rounded-lg bg-[#12121c] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 transition-colors [color-scheme:dark]"
-            >
-              {TIME_OPTIONS.map((t) => (
-                <option key={t} value={t}>
-                  {formatTimeLabel(t)}
-                </option>
-              ))}
-            </select>
+            />
           </div>
+        </div>
+
+        {/* Description with AI wand */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-medium text-gray-400">Description</label>
+            <DescriptionWand title={title} onGenerated={setDescription} />
+          </div>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Add a description… or use ✨ AI Write"
+            rows={2}
+            className="w-full rounded-lg bg-[#12121c] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none focus:border-indigo-500/50 transition-colors"
+          />
         </div>
 
         {/* Color */}
@@ -249,6 +282,36 @@ export function NewEventModal({ isOpen, onClose, onCreated, defaultDate }: NewEv
                 }`}
               >
                 <div className={`w-2 h-2 rounded-full ${opt.bg}`} />
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Availability */}
+        <div>
+          <label className="block text-xs font-medium text-gray-400 mb-2">Availability</label>
+          <div className="flex gap-2">
+            {[
+              { value: "busy", label: "Busy", desc: "No tasks scheduled" },
+              { value: "free_tight", label: "Tight", desc: "No deep work" },
+              { value: "free_light", label: "Light", desc: "Light tasks only" },
+              { value: "free", label: "Free", desc: "All tasks allowed" },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setAvailability(opt.value)}
+                className={`flex-1 rounded-lg px-2 py-1.5 text-xs text-center transition-all ${
+                  availability === opt.value
+                    ? opt.value === "busy" ? "bg-red-500/20 text-red-300 ring-1 ring-red-500/40"
+                    : opt.value === "free_tight" ? "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40"
+                    : opt.value === "free_light" ? "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40"
+                    : "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/40"
+                    : "bg-[#2a2a3c] text-gray-500 hover:text-gray-300 hover:bg-[#3a3a4c]"
+                }`}
+                title={opt.desc}
+              >
                 {opt.label}
               </button>
             ))}

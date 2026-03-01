@@ -18,8 +18,12 @@ model User {
   accounts      Account[]
   sessions      Session[]
   tasks         Task[]
+  projects      Project[]
   scheduledBlocks ScheduledBlock[]
   preferences   Preferences?
+  googleEventTransports GoogleEventTransport[]
+  metricDefinitions MetricDefinition[]
+  metricEntries     MetricEntry[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -60,35 +64,78 @@ model VerificationToken {
 
 // ─── App models ───
 
+model Project {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  color       String   @default("indigo")
+  status      String   @default("active") // active, completed, archived
+  deadline    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+}
+
 model Task {
   id                  String   @id @default(cuid())
   userId              String
   title               String
   durationMinutes     Int
   deadline            DateTime?
-  priority            String   @default("medium") // high, medium, low
+  priority            String   @default("medium") // asap, high, medium, low
   energyType          String   @default("deep")   // deep, light, admin
   preferredTimeWindow String?  // e.g. "morning", "afternoon", "evening"
   completed           Boolean  @default(false)
+  taskStatus          String   @default("todo")   // todo, in_progress, completed, cancelled, blocked
+  projectId           String?
+  metricId            String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project             Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  metric              MetricDefinition? @relation(fields: [metricId], references: [id])
   scheduledBlocks     ScheduledBlock[]
+  metricEntries       MetricEntry[]
 }
 
 model ScheduledBlock {
-  id            String   @id @default(cuid())
-  userId        String
-  taskId        String?
-  googleEventId String?
-  title         String
-  startTime     DateTime
-  endTime       DateTime
-  date          String   // YYYY-MM-DD for easy querying
-  color         String   @default("indigo")
-  createdAt     DateTime @default(now())
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  task          Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  id              String    @id @default(cuid())
+  userId          String
+  taskId          String?
+  googleEventId   String?
+  title           String
+  startTime       DateTime
+  endTime         DateTime
+  date            String    // YYYY-MM-DD for easy querying
+  color           String    @default("indigo")
+  status          String    @default("scheduled") // "scheduled" | "in_progress" | "completed"
+  availability    String    @default("busy") // "busy" | "free_tight" | "free_light" | "free"
+  actualStartTime DateTime?
+  actualEndTime   DateTime?
+  location        String?   // destination address of this event
+  transportBefore Int?      // travel minutes before event
+  transportAfter  Int?      // travel minutes after event
+  transportMode   String?   // "driving" | "transit" | "walking" | "cycling"
+  createdAt       DateTime  @default(now())
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task            Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+}
+
+model GoogleEventTransport {
+  id              String   @id @default(cuid())
+  userId          String
+  googleEventId   String
+  location        String?
+  transportBefore Int?
+  transportAfter  Int?
+  transportMode   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, googleEventId])
 }
 
 model Preferences {
@@ -99,9 +146,41 @@ model Preferences {
   workDays       String @default("1,2,3,4,5") // comma-separated day numbers (1=Mon)
   deepWorkStart  String @default("09:00")
   deepWorkEnd    String @default("12:00")
-  breakMinutes   Int    @default(15)
+  breakMinutes   Int    @default(5)
   timezone       String @default("America/New_York")
-  openaiApiKey   String?
-  openaiModel    String @default("gpt-4o-mini")
-  user           User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  aiProvider       String @default("gemini") // "openai" | "gemini"
+  openaiApiKey     String?
+  openaiModel      String @default("gemini-2.0-flash")
+  googleMapsApiKey String?  // user's Google Maps API key
+  savedPlaces      String?  // JSON: [{name, address}]
+  user             User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model MetricDefinition {
+  id          String        @id @default(cuid())
+  userId      String
+  name        String        // "Dials", "Distance Run", "Videos Produced"
+  unit        String        // "calls", "km", "videos"
+  icon        String        // emoji e.g. "📞", "🏃", "🎬"
+  category    String        // "sales", "fitness", "content", "finance", etc.
+  aggregation String        @default("sum") // "sum" | "max" | "avg" | "last"
+  isPreset    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries     MetricEntry[]
+  tasks       Task[]
+}
+
+model MetricEntry {
+  id          String           @id @default(cuid())
+  userId      String
+  metricId    String
+  taskId      String?
+  value       Float
+  date        DateTime         @default(now())
+  notes       String?
+  createdAt   DateTime         @default(now())
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  metric      MetricDefinition @relation(fields: [metricId], references: [id], onDelete: Cascade)
+  task        Task?            @relation(fields: [taskId], references: [id])
 }
