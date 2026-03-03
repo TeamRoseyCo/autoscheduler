@@ -2,6 +2,16 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { CalendarEventData } from "@/components/week-calendar";
+import { CATEGORY_LABELS } from "@/lib/preset-metrics";
+import { EmojiText } from "@/components/emoji-text";
+
+interface MetricOption {
+  id: string;
+  name: string;
+  unit: string;
+  icon: string;
+  category: string;
+}
 
 interface CompletionDialogProps {
   event: CalendarEventData | null;
@@ -48,6 +58,23 @@ export function CompletionDialog({ event, onClose, onConfirm }: CompletionDialog
   // Metric logging
   const [metricValue, setMetricValue] = useState("");
   const [metricNotes, setMetricNotes] = useState("");
+  const [allMetrics, setAllMetrics] = useState<MetricOption[]>([]);
+  const [selectedMetricId, setSelectedMetricId] = useState<string>("");
+
+  // Fetch all metrics for the dropdown
+  useEffect(() => {
+    fetch("/api/metrics")
+      .then((res) => res.ok ? res.json() : [])
+      .then(setAllMetrics)
+      .catch(() => {});
+  }, []);
+
+  // Group metrics by category
+  const metricsByCategory = allMetrics.reduce<Record<string, MetricOption[]>>((acc, m) => {
+    if (!acc[m.category]) acc[m.category] = [];
+    acc[m.category].push(m);
+    return acc;
+  }, {});
 
   // Update defaults when event changes
   useEffect(() => {
@@ -61,6 +88,7 @@ export function CompletionDialog({ event, onClose, onConfirm }: CompletionDialog
       setReschedule(false);
       setMetricValue("");
       setMetricNotes("");
+      setSelectedMetricId(event.taskMetric?.id ?? "");
     }
   }, [event]);
 
@@ -100,10 +128,11 @@ export function CompletionDialog({ event, onClose, onConfirm }: CompletionDialog
         ? toDateInput(new Date(new Date(actualDate).getTime() + 86_400_000))
         : actualDate;
 
+    const activeMetricId = event.taskMetric?.id || selectedMetricId;
     const metricEntry =
-      event.taskMetric && metricValue.trim()
+      activeMetricId && metricValue.trim()
         ? {
-            metricId: event.taskMetric.id,
+            metricId: activeMetricId,
             value: parseFloat(metricValue),
             notes: metricNotes.trim() || undefined,
           }
@@ -144,7 +173,7 @@ export function CompletionDialog({ event, onClose, onConfirm }: CompletionDialog
         </div>
 
         {/* Event title */}
-        <p className="text-sm text-gray-400 truncate">{event.title}</p>
+        <p className="text-sm text-gray-400 truncate"><EmojiText text={event.title} emojiSize={14} /></p>
 
         {/* Date picker */}
         <div>
@@ -218,33 +247,61 @@ export function CompletionDialog({ event, onClose, onConfirm }: CompletionDialog
           </label>
         )}
 
-        {/* Metric logging — only shown if task has a linked metric */}
-        {event.taskMetric && (
-          <div className="rounded-lg bg-[#12121c] border border-[#2a2a3c] p-4 space-y-3">
+        {/* Metric logging — always shown */}
+        <div className="rounded-lg bg-[#12121c] border border-[#2a2a3c] p-4 space-y-3">
+          {event.taskMetric ? (
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-              {event.taskMetric.icon} Log {event.taskMetric.name}
+              <EmojiText text={`${event.taskMetric.icon} Log ${event.taskMetric.name}`} emojiSize={14} />
             </p>
-            <div className="flex items-center gap-2">
+          ) : (
+            <>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                Log a Metric
+              </p>
+              <select
+                value={selectedMetricId}
+                onChange={(e) => setSelectedMetricId(e.target.value)}
+                className="w-full rounded-lg bg-[#1e1e30] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-indigo-500/50"
+              >
+                <option value="">Skip metric</option>
+                {Object.entries(metricsByCategory).map(([cat, mets]) => (
+                  <optgroup key={cat} label={CATEGORY_LABELS[cat] ?? cat}>
+                    {mets.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.icon} {m.name} ({m.unit})
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </>
+          )}
+          {(event.taskMetric || selectedMetricId) && (
+            <>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={metricValue}
+                  onChange={(e) => setMetricValue(e.target.value)}
+                  min={0}
+                  step="any"
+                  className="w-28 rounded-lg bg-[#1e1e30] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-indigo-500/50"
+                />
+                <span className="text-sm text-gray-500">
+                  {event.taskMetric?.unit || allMetrics.find((m) => m.id === selectedMetricId)?.unit || ""}
+                </span>
+              </div>
               <input
-                type="number"
-                placeholder="0"
-                value={metricValue}
-                onChange={(e) => setMetricValue(e.target.value)}
-                min={0}
-                step="any"
-                className="w-28 rounded-lg bg-[#1e1e30] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-indigo-500/50"
+                type="text"
+                placeholder="Notes (optional)"
+                value={metricNotes}
+                onChange={(e) => setMetricNotes(e.target.value)}
+                className="w-full rounded-lg bg-[#1e1e30] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-indigo-500/50 placeholder:text-gray-600"
               />
-              <span className="text-sm text-gray-500">{event.taskMetric.unit}</span>
-            </div>
-            <input
-              type="text"
-              placeholder="Notes (optional)"
-              value={metricNotes}
-              onChange={(e) => setMetricNotes(e.target.value)}
-              className="w-full rounded-lg bg-[#1e1e30] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-indigo-500/50 placeholder:text-gray-600"
-            />
-          </div>
-        )}
+            </>
+          )}
+        </div>
 
         {/* Actions */}
         <div className="flex justify-end gap-2 pt-1">

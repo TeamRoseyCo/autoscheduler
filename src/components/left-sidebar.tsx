@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import { ProjectListSidebar } from "@/components/project-list-sidebar";
+import { UniSidebarSection } from "@/components/uni-sidebar-section";
 import type { ProjectWithCounts } from "@/lib/actions/projects";
 
 interface LeftSidebarProps {
@@ -153,6 +154,7 @@ export function LeftSidebar({
           <SidebarLink href="/tasks" icon={TasksIcon} label="Tasks" active={pathname === "/tasks"} collapsed />
           <SidebarLink href="/stats" icon={StatsIcon} label="Stats" active={pathname === "/stats"} collapsed />
           <SidebarLink href="/settings" icon={SettingsIcon} label="Settings" active={pathname === "/settings"} collapsed />
+          <UniSidebarSection collapsed />
         </nav>
 
         <div className="border-t border-[#2a2a3c] px-2 py-2">
@@ -255,6 +257,9 @@ export function LeftSidebar({
           onProjectClick={onProjectClick}
           onProjectContextMenu={onProjectContextMenu}
         />
+
+        {/* University section */}
+        <UniSidebarSection />
 
         {/* Legend section */}
         <div className="pt-4 pb-1">

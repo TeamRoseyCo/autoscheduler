@@ -216,12 +216,19 @@ export async function scheduleDay(userId: string, targetDate: string) {
   const dayEnd = new Date(`${targetDate}T23:59:59`);
   const busySlots = await getBusySlots(userId, dayStart, dayEnd);
 
-  // 3b. Add completed local blocks (+ their transport buffers) as busy so the
-  //     AI never schedules new tasks during completed work or travel time
-  const completedBlocks = await prisma.scheduledBlock.findMany({
-    where: { userId, date: targetDate, status: "completed" },
+  // 3b. Add completed blocks AND pure events (no taskId) as busy so the
+  //     scheduler never places new tasks during completed work, travel time, or events
+  const preservedBlocks = await prisma.scheduledBlock.findMany({
+    where: {
+      userId,
+      date: targetDate,
+      OR: [
+        { status: "completed" },
+        { taskId: null },         // pure events — always preserve
+      ],
+    },
   });
-  const completedBusy: BusySlot[] = completedBlocks.map((b) => ({
+  const completedBusy: BusySlot[] = preservedBlocks.map((b) => ({
     start: new Date(new Date(b.startTime).getTime() - (b.transportBefore ?? 0) * 60 * 1000),
     end: new Date(new Date(b.endTime).getTime() + (b.transportAfter ?? 0) * 60 * 1000),
     summary: b.title,
@@ -345,9 +352,14 @@ Assign tasks to time slots. Return JSON with this exact structure:
     usedLocalFallback = true;
   }
 
-  // 6. Delete old scheduled blocks for this day — but KEEP completed ones
+  // 6. Delete old task blocks for this day — KEEP completed ones AND pure events (no taskId)
   const existingBlocks: ScheduledBlock[] = await prisma.scheduledBlock.findMany({
-    where: { userId, date: targetDate, status: { not: "completed" } },
+    where: {
+      userId,
+      date: targetDate,
+      status: { not: "completed" },
+      taskId: { not: null },    // only task-linked blocks
+    },
   });
 
   for (const block of existingBlocks) {
@@ -361,7 +373,12 @@ Assign tasks to time slots. Return JSON with this exact structure:
   }
 
   await prisma.scheduledBlock.deleteMany({
-    where: { userId, date: targetDate, status: { not: "completed" } },
+    where: {
+      userId,
+      date: targetDate,
+      status: { not: "completed" },
+      taskId: { not: null },    // only task-linked blocks
+    },
   });
 
   // 7. Create new blocks (local only — Google sync happens on task completion)

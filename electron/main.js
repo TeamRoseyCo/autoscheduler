@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell } = require("electron");
+const { app, BrowserWindow, shell, session } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const net = require("net");
@@ -12,7 +12,6 @@ function getNextPath() {
   if (isDev) {
     return path.join(__dirname, "..");
   }
-  // In production, resources are in the app.asar or unpacked
   return path.join(process.resourcesPath, "app");
 }
 
@@ -45,27 +44,45 @@ async function waitForServer(port, maxAttempts = 60) {
 
 function startNextServer() {
   const cwd = getNextPath();
-  const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
 
-  const args = isDev ? ["run", "dev"] : ["run", "start"];
-  nextProcess = spawn(npmCmd, args, {
-    cwd,
-    stdio: "pipe",
-    env: { ...process.env },
-    windowsHide: true,
-  });
+  try {
+    if (isDev) {
+      const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
+      nextProcess = spawn(npmCmd, ["run", "dev"], {
+        cwd,
+        stdio: "pipe",
+        shell: true,
+        windowsHide: true,
+      });
+    } else {
+      const nextBin = path.join(cwd, "node_modules", "next", "dist", "bin", "next");
+      nextProcess = spawn(process.execPath, [nextBin, "start"], {
+        cwd,
+        stdio: "pipe",
+        shell: true,
+        env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+        windowsHide: true,
+      });
+    }
 
-  nextProcess.stdout.on("data", (data) => {
-    console.log(`[Next.js] ${data}`);
-  });
+    nextProcess.stdout.on("data", (data) => {
+      console.log(`[Next.js] ${data}`);
+    });
 
-  nextProcess.stderr.on("data", (data) => {
-    console.error(`[Next.js] ${data}`);
-  });
+    nextProcess.stderr.on("data", (data) => {
+      console.error(`[Next.js] ${data}`);
+    });
 
-  nextProcess.on("close", (code) => {
-    console.log(`[Next.js] Process exited with code ${code}`);
-  });
+    nextProcess.on("close", (code) => {
+      console.log(`[Next.js] Process exited with code ${code}`);
+    });
+
+    nextProcess.on("error", (err) => {
+      console.error(`[Next.js] Failed to start: ${err.message}`);
+    });
+  } catch (err) {
+    console.error("[Next.js] Spawn error:", err);
+  }
 }
 
 async function createWindow() {
@@ -84,7 +101,6 @@ async function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
     },
-    // Frameless with custom title bar feel
     titleBarStyle: "default",
     autoHideMenuBar: true,
   });
@@ -94,10 +110,18 @@ async function createWindow() {
     mainWindow.show();
   });
 
-  // Open external links in browser
+  // Open external links AND Google OAuth in the system browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };
+  });
+
+  // Intercept navigations to Google OAuth — open in system browser instead
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (url.includes("accounts.google.com")) {
+      event.preventDefault();
+      shell.openExternal(url);
+    }
   });
 
   mainWindow.on("closed", () => {
@@ -106,11 +130,19 @@ async function createWindow() {
 }
 
 app.on("ready", async () => {
+  // ── Autostart on Windows login (only when packaged) ──
+  if (!isDev) {
+    try {
+      app.setLoginItemSettings({ openAtLogin: true });
+    } catch (err) {
+      console.error("Failed to set login item:", err);
+    }
+  }
+
   // Check if Next.js is already running
   const portFree = await checkPort(PORT);
 
   if (portFree) {
-    // Port is free, we need to start Next.js
     startNextServer();
   }
 
@@ -187,11 +219,20 @@ app.on("ready", async () => {
   }
 });
 
+app.on("before-quit", () => {
+  // Flush cookies to disk so the session persists across restarts
+  try {
+    session.defaultSession.cookies.flushStore();
+  } catch {
+    // ignore
+  }
+});
+
 app.on("window-all-closed", () => {
   // Kill the Next.js process
   if (nextProcess) {
     if (process.platform === "win32") {
-      spawn("taskkill", ["/pid", nextProcess.pid, "/f", "/t"]);
+      spawn("taskkill", ["/pid", nextProcess.pid, "/f", "/t"], { shell: true });
     } else {
       nextProcess.kill("SIGTERM");
     }

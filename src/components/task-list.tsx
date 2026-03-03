@@ -20,13 +20,13 @@ export function TaskList({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
+        <div className="flex gap-1 rounded-lg bg-[#12121c] p-1 border border-[#2a2a3c]">
           <button
             onClick={() => setTab("active")}
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               tab === "active"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
+                ? "bg-[#2a2a3c] text-gray-100 shadow-sm"
+                : "text-gray-500 hover:text-gray-300"
             }`}
           >
             Active ({activeTasks.length})
@@ -35,8 +35,8 @@ export function TaskList({
             onClick={() => setTab("completed")}
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               tab === "completed"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
+                ? "bg-[#2a2a3c] text-gray-100 shadow-sm"
+                : "text-gray-500 hover:text-gray-300"
             }`}
           >
             Done ({completedTasks.length})
@@ -44,20 +44,20 @@ export function TaskList({
         </div>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 transition-colors"
+          className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-500 transition-colors"
         >
           {showForm ? "Cancel" : "+ Add Task"}
         </button>
       </div>
 
       {showForm && (
-        <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <div className="rounded-lg border border-[#2a2a3c] bg-[#1e1e30] p-4">
           <TaskForm onDone={() => setShowForm(false)} />
         </div>
       )}
 
       {tasks.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500">
+        <div className="rounded-lg border border-dashed border-[#2a2a3c] p-8 text-center text-sm text-gray-500">
           {tab === "active"
             ? "No active tasks. Add one to get started!"
             : "No completed tasks yet."}

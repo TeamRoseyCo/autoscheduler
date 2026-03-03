@@ -110,7 +110,7 @@ if "%choice%"=="1" (
         start "" "dist-electron\win-unpacked\AutoScheduler.exe"
     ) else (
         echo   Desktop build not found. Starting with Electron dev mode...
-        npm run electron
+        call npm run electron
     )
 ) else (
     echo.
@@ -118,6 +118,6 @@ if "%choice%"=="1" (
     echo   Browser will open automatically.
     echo.
     start /b cmd /c "timeout /t 4 /nobreak >nul && start http://localhost:3000"
-    npm run dev
+    call npm run dev
 )
 pause

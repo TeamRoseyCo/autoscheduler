@@ -30,44 +30,44 @@ export function getColorClasses(color: string): {
 } {
   const colors: Record<string, { bg: string; border: string; text: string }> = {
     indigo: {
-      bg: "bg-indigo-100",
-      border: "border-indigo-400",
-      text: "text-indigo-800",
+      bg: "bg-indigo-500/15",
+      border: "border-indigo-500",
+      text: "text-indigo-300",
     },
     emerald: {
-      bg: "bg-emerald-100",
-      border: "border-emerald-400",
-      text: "text-emerald-800",
+      bg: "bg-emerald-500/15",
+      border: "border-emerald-500",
+      text: "text-emerald-300",
     },
     amber: {
-      bg: "bg-amber-100",
-      border: "border-amber-400",
-      text: "text-amber-800",
+      bg: "bg-amber-500/15",
+      border: "border-amber-500",
+      text: "text-amber-300",
     },
     gray: {
-      bg: "bg-gray-100",
-      border: "border-gray-400",
-      text: "text-gray-800",
+      bg: "bg-gray-500/15",
+      border: "border-gray-500",
+      text: "text-gray-300",
     },
     rose: {
-      bg: "bg-rose-100",
-      border: "border-rose-400",
-      text: "text-rose-800",
+      bg: "bg-rose-500/15",
+      border: "border-rose-500",
+      text: "text-rose-300",
     },
     cyan: {
-      bg: "bg-cyan-100",
-      border: "border-cyan-400",
-      text: "text-cyan-800",
+      bg: "bg-cyan-500/15",
+      border: "border-cyan-500",
+      text: "text-cyan-300",
     },
     violet: {
-      bg: "bg-violet-100",
-      border: "border-violet-400",
-      text: "text-violet-800",
+      bg: "bg-violet-500/15",
+      border: "border-violet-500",
+      text: "text-violet-300",
     },
     orange: {
-      bg: "bg-orange-100",
-      border: "border-orange-400",
-      text: "text-orange-800",
+      bg: "bg-orange-500/15",
+      border: "border-orange-500",
+      text: "text-orange-300",
     },
   };
   return colors[color] || colors.gray;

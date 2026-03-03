@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { GlobalEmojiReplacer } from "@/components/global-emoji-replacer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,7 +29,10 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased h-screen overflow-hidden bg-[#12121c]`}
       >
-        <Providers>{children}</Providers>
+        <Providers>
+          <GlobalEmojiReplacer />
+          {children}
+        </Providers>
       </body>
     </html>
   );

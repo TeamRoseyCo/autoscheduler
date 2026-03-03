@@ -102,13 +102,13 @@ export function TaskForm({
   return (
     <form ref={formRef} action={formAction} className="space-y-4">
       {state?.error && (
-        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+        <div className="rounded-md bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-300">
           {state.error}
         </div>
       )}
 
       <div>
-        <label className="block text-sm font-medium text-gray-700">
+        <label className="block text-sm font-medium text-gray-300">
           Title
         </label>
         <div className="mt-1 flex gap-2">
@@ -119,22 +119,22 @@ export function TaskForm({
             value={titleValue}
             onChange={(e) => setTitleValue(e.target.value)}
             placeholder="What needs to be done?"
-            className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            className="block w-full rounded-md bg-[#12121c] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 placeholder-gray-600 shadow-sm focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30"
           />
           <button
             type="button"
             onClick={handleAutoDetect}
             disabled={isSuggestingMetric || !titleValue.trim()}
             title="Auto-detect metric from title"
-            className="flex-shrink-0 rounded-md border border-gray-300 px-2.5 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40"
+            className="flex-shrink-0 rounded-md border border-[#2a2a3c] px-2.5 py-2 text-sm text-gray-400 hover:text-gray-200 hover:bg-[#2a2a3c] transition-colors disabled:opacity-40"
           >
-            {isSuggestingMetric ? "..." : "✨"}
+            {isSuggestingMetric ? "..." : "\u2728"}
           </button>
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-gray-300 mb-1">
           Duration
         </label>
         <div className="flex flex-wrap gap-2 mb-2">
@@ -142,7 +142,7 @@ export function TaskForm({
             <button
               key={mins}
               type="button"
-              className="rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+              className="rounded-md border border-[#2a2a3c] px-2.5 py-1 text-xs text-gray-400 hover:text-gray-200 hover:bg-[#2a2a3c] transition-colors"
               onClick={(e) => {
                 const input = (e.target as HTMLElement)
                   .closest("div")
@@ -163,13 +163,13 @@ export function TaskForm({
           min={5}
           max={480}
           defaultValue={task?.durationMinutes || 30}
-          className="block w-24 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+          className="block w-24 rounded-md bg-[#12121c] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 shadow-sm focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30"
         />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-300">
             Deadline
           </label>
           <input
@@ -180,17 +180,17 @@ export function TaskForm({
                 ? new Date(task.deadline).toISOString().split("T")[0]
                 : ""
             }
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            className="mt-1 block w-full rounded-md bg-[#12121c] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 shadow-sm focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 [color-scheme:dark]"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-300">
             Priority
           </label>
           <select
             name="priority"
             defaultValue={task?.priority || "medium"}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            className="mt-1 block w-full rounded-md bg-[#12121c] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 shadow-sm focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30"
           >
             <option value="asap">ASAP</option>
             <option value="high">High</option>
@@ -202,13 +202,13 @@ export function TaskForm({
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-300">
             Energy Type
           </label>
           <select
             name="energyType"
             defaultValue={task?.energyType || "deep"}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            className="mt-1 block w-full rounded-md bg-[#12121c] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 shadow-sm focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30"
           >
             <option value="deep">Deep Focus</option>
             <option value="light">Light Work</option>
@@ -216,13 +216,13 @@ export function TaskForm({
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-300">
             Preferred Time
           </label>
           <select
             name="preferredTimeWindow"
             defaultValue={task?.preferredTimeWindow || ""}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            className="mt-1 block w-full rounded-md bg-[#12121c] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 shadow-sm focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30"
           >
             <option value="">No preference</option>
             <option value="morning">Morning</option>
@@ -233,13 +233,13 @@ export function TaskForm({
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700">
+        <label className="block text-sm font-medium text-gray-300">
           Project
         </label>
         <select
           name="projectId"
           defaultValue={task?.projectId || ""}
-          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+          className="mt-1 block w-full rounded-md bg-[#12121c] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 shadow-sm focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30"
         >
           <option value="">No project</option>
           {projects.filter((p) => p.status === "active").map((p) => (
@@ -250,27 +250,27 @@ export function TaskForm({
 
       {/* Metric picker */}
       <div>
-        <label className="block text-sm font-medium text-gray-700">
+        <label className="block text-sm font-medium text-gray-300">
           Track Metric
         </label>
         {selectedMetric ? (
           <div className="mt-1 flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 border border-indigo-200 px-3 py-1 text-sm text-indigo-700">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/15 border border-indigo-500/25 px-3 py-1 text-sm text-indigo-300">
               <span>{selectedMetric.icon}</span>
               <span>{selectedMetric.name}</span>
-              <span className="text-indigo-400">({selectedMetric.unit})</span>
+              <span className="text-indigo-400/60">({selectedMetric.unit})</span>
             </span>
             <button
               type="button"
               onClick={() => setSelectedMetric(null)}
-              className="text-gray-400 hover:text-gray-600 text-xs"
+              className="text-gray-500 hover:text-gray-300 text-xs"
             >
-              ✕
+              \u2715
             </button>
           </div>
         ) : (
           <select
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            className="mt-1 block w-full rounded-md bg-[#12121c] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 shadow-sm focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30"
             value=""
             onChange={(e) => {
               const m = metrics.find((m) => m.id === e.target.value);
@@ -295,7 +295,7 @@ export function TaskForm({
         <button
           type="submit"
           disabled={isPending}
-          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 transition-colors"
         >
           {isPending ? "Saving..." : task ? "Update Task" : "Add Task"}
         </button>
@@ -303,7 +303,7 @@ export function TaskForm({
           <button
             type="button"
             onClick={onDone}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 transition-colors"
+            className="rounded-md border border-[#2a2a3c] px-4 py-2 text-sm font-medium text-gray-400 shadow-sm hover:text-gray-200 hover:bg-[#2a2a3c] transition-colors"
           >
             Cancel
           </button>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useEffect } from "react";
 import { savePreferences } from "@/lib/actions/preferences";
+import { UniPluginToggle } from "./uni/uni-plugin-toggle";
 import type { Preferences } from "@/generated/prisma/client";
 
 interface SavedPlace {
@@ -41,6 +42,8 @@ export function SettingsForm({
 }: {
   preferences: Preferences | null;
 }) {
+  const [uniSettingsLoaded, setUniSettingsLoaded] = useState(false);
+  const [uniSettings, setUniSettings] = useState<any>(null);
   const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>(() => {
     try {
       return preferences?.savedPlaces ? JSON.parse(preferences.savedPlaces) : [];
@@ -51,6 +54,17 @@ export function SettingsForm({
   const [newPlaceName, setNewPlaceName] = useState("");
   const [newPlaceAddress, setNewPlaceAddress] = useState("");
   const [showAddPlace, setShowAddPlace] = useState(false);
+
+  // Fetch uni settings
+  useEffect(() => {
+    fetch("/api/uni/settings")
+      .then((res) => res.json())
+      .then((data) => {
+        setUniSettings(data);
+        setUniSettingsLoaded(true);
+      })
+      .catch(() => setUniSettingsLoaded(true));
+  }, []);
 
   const [state, formAction, isPending] = useActionState(
     async (_prev: { success?: boolean; error?: string } | null, formData: FormData) => {
@@ -378,6 +392,25 @@ export function SettingsForm({
             )}
           </div>
         </div>
+      </section>
+
+      {/* Plugins Section */}
+      <section className="space-y-4 border-t pt-8">
+        <h2 className="text-lg font-semibold text-gray-900">Plugins</h2>
+        <p className="text-sm text-gray-500">
+          Manage optional features and integrations
+        </p>
+        {uniSettingsLoaded && (
+          <UniPluginToggle
+            initialEnabled={uniSettings?.enabled || false}
+            onToggle={() => {
+              fetch("/api/uni/settings")
+                .then((res) => res.json())
+                .then((data) => setUniSettings(data))
+                .catch(() => null);
+            }}
+          />
+        )}
       </section>
 
       <button

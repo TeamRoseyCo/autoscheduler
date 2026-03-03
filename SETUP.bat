@@ -233,11 +233,35 @@ echo.
 echo   Done with the sign-in screen? Press any key to continue...
 pause >nul
 
-:: --- SUB-STEP D: Create credentials ---
+:: --- SUB-STEP D: Publish the app ---
 cls
 echo.
 echo   ┌────────────────────────────────────────────────┐
-echo   │  3d — Create OAuth Credentials                 │
+echo   │  3d — Publish Your App (Important!)            │
+echo   └────────────────────────────────────────────────┘
+echo.
+echo   This step prevents Google from expiring your
+echo   sign-in every 7 days. It does NOT make your app
+echo   public — only you will use it.
+echo.
+echo   1. Your browser will open to the OAuth consent screen
+echo   2. You should see a "PUBLISH APP" button
+echo   3. Click it, then confirm
+echo   4. The status should change from "Testing" to
+echo      "In production"
+echo.
+echo   Press any key to open the browser...
+pause >nul
+start "" "https://console.cloud.google.com/apis/credentials/consent"
+echo.
+echo   Done publishing? Press any key to continue...
+pause >nul
+
+:: --- SUB-STEP E: Create credentials ---
+cls
+echo.
+echo   ┌────────────────────────────────────────────────┐
+echo   │  3e — Create OAuth Credentials                 │
 echo   └────────────────────────────────────────────────┘
 echo.
 echo   1. Your browser will open to the Credentials page
@@ -262,11 +286,11 @@ echo   Can you see your Client ID and Client Secret in the popup?
 echo   Press any key to continue...
 pause >nul
 
-:: --- SUB-STEP E: Paste credentials ---
+:: --- SUB-STEP F: Paste credentials ---
 cls
 echo.
 echo   ┌────────────────────────────────────────────────┐
-echo   │  3e — Paste Your Credentials Here              │
+echo   │  3f — Paste Your Credentials Here              │
 echo   └────────────────────────────────────────────────┘
 echo.
 echo   Copy and paste from the Google popup.

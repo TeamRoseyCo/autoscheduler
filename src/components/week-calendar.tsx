@@ -18,6 +18,7 @@ import { EventContextMenu } from "@/components/event-context-menu";
 import { CompletionDialog } from "@/components/completion-dialog";
 import { ProjectDetailModal } from "@/components/project-detail-modal";
 import { ProjectContextMenu } from "@/components/project-context-menu";
+import { EmojiText } from "@/components/emoji-text";
 import { scheduleTodayAction, restoreScheduleAction } from "@/lib/actions/schedule";
 import { rescheduleBlockForLater } from "@/lib/actions/reschedule";
 import { deleteProject } from "@/lib/actions/projects";
@@ -599,7 +600,7 @@ function CalendarEvent({
         )}
         <div className="min-w-0 flex-1">
           <p className={`text-[11px] font-medium leading-tight truncate ${colors.text} ${isCompleted ? "line-through opacity-70" : ""}`}>
-            {event.title}
+            <EmojiText text={event.title} emojiSize={12} />
           </p>
           {showTime && !isInProgress && (
             <p className={`text-[10px] mt-0.5 truncate ${colors.sub}`}>
@@ -811,6 +812,7 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
   const [loading, setLoading] = useState(false);
   const [scheduling, setScheduling] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [googleAuthError, setGoogleAuthError] = useState(false);
   const [undoScheduleSnapshot, setUndoScheduleSnapshot] = useState<CalendarEventData[] | null>(null);
   const [projects, setProjects] = useState<ProjectWithCounts[]>(initialProjects);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -894,8 +896,17 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
       if (res.ok) {
         const events: CalendarEventData[] = await res.json();
         setGoogleEvents(events);
+        setGoogleAuthError(false);
       } else {
-        setToastMessage("Could not load Google Calendar events");
+        const data = await res.json().catch(() => null);
+        const msg = data?.error || "Could not load Google Calendar events";
+        console.error("Google Calendar error:", msg);
+        // Detect auth-related failures — show reconnect banner instead of toast
+        if (msg.includes("sign out") || msg.includes("refresh token") || msg.includes("expired") || msg.includes("revoked")) {
+          setGoogleAuthError(true);
+        } else {
+          setToastMessage(msg);
+        }
       }
     } catch {
       setToastMessage("Could not load Google Calendar events");
@@ -1566,6 +1577,36 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
             )}
           </div>
         </div>
+
+        {/* Google Calendar reconnect banner */}
+        {googleAuthError && (
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-amber-900/30 border-b border-amber-700/40 flex-shrink-0">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-amber-400 flex-shrink-0">
+              <path d="M8 1l7 13H1L8 1z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+              <path d="M8 6v3M8 11.5v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            <span className="text-sm text-amber-200">Google Calendar disconnected — your token expired.</span>
+            <button
+              onClick={() => {
+                // Sign out via NextAuth then redirect to home to trigger fresh sign-in
+                fetch("/api/auth/signout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ csrfToken: "" }) })
+                  .finally(() => { window.location.href = "/"; });
+              }}
+              className="ml-auto px-3 py-1 text-xs font-medium rounded-md bg-amber-600 hover:bg-amber-500 text-white transition-colors"
+            >
+              Sign out &amp; reconnect
+            </button>
+            <button
+              onClick={() => setGoogleAuthError(false)}
+              className="text-amber-400/60 hover:text-amber-300 transition-colors p-0.5"
+              title="Dismiss"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+        )}
 
         {/* Month View */}
         {view === "month" ? (

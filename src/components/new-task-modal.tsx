@@ -6,6 +6,15 @@ import { categorizeTask } from "@/lib/categorize";
 import { EmojiPicker } from "@/components/emoji-picker";
 import { DescriptionWand } from "@/components/description-wand";
 import type { ProjectWithCounts } from "@/lib/actions/projects";
+import { CATEGORY_LABELS } from "@/lib/preset-metrics";
+
+interface MetricOption {
+  id: string;
+  name: string;
+  unit: string;
+  icon: string;
+  category: string;
+}
 
 interface NewTaskModalProps {
   isOpen: boolean;
@@ -67,8 +76,26 @@ export function NewTaskModal({ isOpen, onClose, onCreated, projects }: NewTaskMo
   const [projectId, setProjectId] = useState("");
   const [description, setDescription] = useState("");
   const [taskStatus, setTaskStatus] = useState("todo");
+  const [metrics, setMetrics] = useState<MetricOption[]>([]);
+  const [selectedMetric, setSelectedMetric] = useState<MetricOption | null>(null);
+  const [isSuggestingMetric, setIsSuggestingMetric] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
+
+  // Fetch metrics once
+  useEffect(() => {
+    fetch("/api/metrics")
+      .then((res) => res.ok ? res.json() : [])
+      .then(setMetrics)
+      .catch(() => {});
+  }, []);
+
+  // Group metrics by category
+  const metricsByCategory = metrics.reduce<Record<string, MetricOption[]>>((acc, m) => {
+    if (!acc[m.category]) acc[m.category] = [];
+    acc[m.category].push(m);
+    return acc;
+  }, {});
 
   // Reset form when opened
   useEffect(() => {
@@ -83,6 +110,7 @@ export function NewTaskModal({ isOpen, onClose, onCreated, projects }: NewTaskMo
       setPreferredTime("");
       setProjectId("");
       setTaskStatus("todo");
+      setSelectedMetric(null);
       setError(null);
       setSaving(false);
       setTimeout(() => titleInputRef.current?.focus(), 50);
@@ -127,6 +155,24 @@ export function NewTaskModal({ isOpen, onClose, onCreated, projects }: NewTaskMo
     titleInputRef.current?.focus();
   };
 
+  const handleAutoDetectMetric = async () => {
+    if (!title.trim()) return;
+    setIsSuggestingMetric(true);
+    try {
+      const res = await fetch("/api/metrics/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.metric) setSelectedMetric(data.metric);
+      }
+    } finally {
+      setIsSuggestingMetric(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -143,6 +189,7 @@ export function NewTaskModal({ isOpen, onClose, onCreated, projects }: NewTaskMo
       formData.set("preferredTimeWindow", preferredTime);
       formData.set("projectId", projectId);
       formData.set("taskStatus", taskStatus);
+      if (selectedMetric) formData.set("metricId", selectedMetric.id);
       await createTask(formData);
       onCreated();
       onClose();
@@ -380,6 +427,64 @@ export function NewTaskModal({ isOpen, onClose, onCreated, projects }: NewTaskMo
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
+              </div>
+            </div>
+
+            <div className="h-px bg-[#2a2a3c]" />
+
+            {/* Metric picker */}
+            <div className="flex items-center gap-3">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-gray-500 flex-shrink-0">
+                <path d="M3 13V6M8 13V3M13 13V8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+              <div className="flex-1">
+                {selectedMetric ? (
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/15 border border-indigo-500/25 px-3 py-1 text-xs text-indigo-300">
+                      <span>{selectedMetric.icon}</span>
+                      <span>{selectedMetric.name}</span>
+                      <span className="text-indigo-400/60">({selectedMetric.unit})</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMetric(null)}
+                      className="text-gray-500 hover:text-gray-300 text-xs"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-1.5">
+                    <select
+                      className="flex-1 bg-[#12121c] border border-[#2a2a3c] rounded-lg px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-indigo-500/50"
+                      value=""
+                      onChange={(e) => {
+                        const m = metrics.find((m) => m.id === e.target.value);
+                        if (m) setSelectedMetric(m);
+                      }}
+                    >
+                      <option value="">No metric</option>
+                      {Object.entries(metricsByCategory).map(([cat, mets]) => (
+                        <optgroup key={cat} label={CATEGORY_LABELS[cat] ?? cat}>
+                          {mets.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.icon} {m.name} ({m.unit})
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={handleAutoDetectMetric}
+                      disabled={isSuggestingMetric || !title.trim()}
+                      title="AI suggest metric"
+                      className="flex-shrink-0 rounded-lg border border-[#2a2a3c] px-2 py-1.5 text-xs text-gray-400 hover:text-gray-200 hover:bg-[#2a2a3c] transition-colors disabled:opacity-40"
+                    >
+                      {isSuggestingMetric ? "..." : "✨"}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

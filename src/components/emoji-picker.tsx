@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { AppleEmoji } from "@/components/apple-emoji";
 
 interface EmojiPickerProps {
   onSelect: (emoji: string) => void;
@@ -22,6 +23,10 @@ const EMOJI_CATEGORIES = [
   {
     label: "Life",
     emojis: ["\u{1F37D}\uFE0F", "\u{1F3C3}", "\u{1F4A4}", "\u{1F9D8}", "\u{2615}", "\u{1F4DA}", "\u{1F3E0}", "\u{2764}\uFE0F"],
+  },
+  {
+    label: "Relationships",
+    emojis: ["\u{1F48D}", "\u{1F491}", "\u{1F46A}", "\u{1F476}", "\u{1F46B}", "\u{1F618}", "\u{1F496}", "\u{1F4D6}"],
   },
   {
     label: "Misc",
@@ -52,7 +57,7 @@ export function EmojiPicker({ onSelect }: EmojiPickerProps) {
         className="rounded-lg p-2 text-gray-400 hover:text-gray-200 hover:bg-[#2a2a3c] transition-colors text-sm"
         title="Add emoji"
       >
-        {"\u{1F642}"}
+        <AppleEmoji emoji={"\u{1F642}"} size={18} />
       </button>
 
       {open && (
@@ -71,9 +76,9 @@ export function EmojiPicker({ onSelect }: EmojiPickerProps) {
                       onSelect(emoji);
                       setOpen(false);
                     }}
-                    className="w-8 h-8 flex items-center justify-center rounded hover:bg-[#2a2a3c] transition-colors text-base"
+                    className="w-8 h-8 flex items-center justify-center rounded hover:bg-[#2a2a3c] transition-colors"
                   >
-                    {emoji}
+                    <AppleEmoji emoji={emoji} size={22} />
                   </button>
                 ))}
               </div>

@@ -24,6 +24,16 @@ model User {
   googleEventTransports GoogleEventTransport[]
   metricDefinitions MetricDefinition[]
   metricEntries     MetricEntry[]
+  uniSettings    UniSettings?
+  uniSemesters   UniSemester[]
+  uniCourses     UniCourse[]
+  uniClassSlots  UniClassSlot[]
+  uniExams       UniExam[]
+  uniGradeItems  UniGradeItem[]
+  uniNotes       UniNote[]
+  uniSummaries   UniClassSummary[]
+  uniResources   UniResource[]
+  uniMoodleSyncs UniMoodleSync[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -183,4 +193,172 @@ model MetricEntry {
   user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   metric      MetricDefinition @relation(fields: [metricId], references: [id], onDelete: Cascade)
   task        Task?            @relation(fields: [taskId], references: [id])
+}
+
+// ─── UniTracker Plugin Models ───
+
+model UniSettings {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled         Boolean  @default(false)
+  universityName  String?
+  studentName     String?
+  gradeScale      String   @default("4.0")   // "4.0"|"4.3"|"percentage"|"custom"
+  targetGPA       Float?
+  moodleUrl       String?
+  moodleToken     String?
+  moodleUserId    Int?
+  customScaleJson String?                    // JSON: [{letter, minPercent, gpa}]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model UniSemester {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String   // "Fall 2025", "Spring 2026"
+  startDate DateTime
+  endDate   DateTime
+  isCurrent Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courses   UniCourse[]
+}
+
+model UniCourse {
+  id             String   @id @default(cuid())
+  userId         String
+  semesterId     String
+  code           String   // "CS101", "MATH201"
+  name           String
+  professor      String?
+  room           String?
+  credits        Int?
+  color          String   @default("indigo")
+  status         String   @default("active") // "active", "completed", "dropped"
+  moodleCourseId Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  semester       UniSemester @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  classSlots     UniClassSlot[]
+  exams          UniExam[]
+  gradeItems     UniGradeItem[]
+  notes          UniNote[]
+  summaries      UniClassSummary[]
+  resources      UniResource[]
+}
+
+model UniClassSlot {
+  id         String   @id @default(cuid())
+  userId     String
+  courseId   String
+  dayOfWeek  Int      // 0-6 (0=Sunday, 1=Monday, etc.)
+  startTime  String   @default("09:00") // HH:MM
+  endTime    String   @default("10:00")
+  type       String   @default("lecture") // "lecture", "lab", "tutorial", "seminar"
+  location   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course     UniCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
+
+model UniExam {
+  id              String   @id @default(cuid())
+  userId          String
+  courseId        String
+  title           String
+  type            String   @default("exam") // "exam", "assignment", "project", "quiz"
+  date            DateTime
+  time            String?  // HH:MM
+  location        String?
+  weight          Float?   // percentage weight in grade
+  notes           String?
+  completed       Boolean  @default(false)
+  calendarBlockId String?  // ID of auto-created ScheduledBlock (no FK)
+  studyTaskId     String?  // ID of auto-created Task (no FK)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course          UniCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
+
+model UniGradeItem {
+  id         String   @id @default(cuid())
+  userId     String
+  courseId   String?  // nullable for general grade items
+  name       String
+  category   String?  // "midterm", "final", "homework", etc.
+  weight     Float?   // percentage weight in course grade
+  maxScore   Float
+  score      Float?
+  date       DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course     UniCourse? @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
+
+model UniNote {
+  id        String   @id @default(cuid())
+  userId    String
+  courseId  String?  // nullable for general notes
+  title     String
+  content   String   // markdown
+  tags      String?  // CSV tags
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course    UniCourse? @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
+
+model UniClassSummary {
+  id              String   @id @default(cuid())
+  userId          String
+  courseId        String?  // nullable for general summaries
+  date            DateTime
+  type            String   @default("lecture") // "lecture", "lab", "tutorial"
+  topics          String?  // CSV or markdown list
+  summary         String?  // main summary/notes
+  keyTakeaways    String?  // markdown bullet points
+  questions       String?  // unanswered questions
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course          UniCourse? @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
+
+model UniResource {
+  id         String   @id @default(cuid())
+  userId     String
+  courseId   String?  // nullable for general resources
+  title      String
+  url        String?
+  type       String   @default("link") // "link", "file", "textbook", "video", "website"
+  category   String?
+  notes      String?
+  starred    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course     UniCourse? @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
+
+model UniMoodleSync {
+  id           String   @id @default(cuid())
+  userId       String
+  dataType     String   // "courses", "assignments", "resources", "grades"
+  lastSyncAt   DateTime?
+  status       String   @default("pending") // "pending", "syncing", "success", "error"
+  itemCount    Int      @default(0)
+  error        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dataType])
 }
