@@ -2,16 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { CalendarEventData } from "@/components/week-calendar";
-import { CATEGORY_LABELS } from "@/lib/preset-metrics";
 import { EmojiText } from "@/components/emoji-text";
-
-interface MetricOption {
-  id: string;
-  name: string;
-  unit: string;
-  icon: string;
-  category: string;
-}
+import { MetricPicker, type MetricOption } from "@/components/metric-picker";
 
 interface CompletionDialogProps {
   event: CalendarEventData | null;
@@ -69,12 +61,7 @@ export function CompletionDialog({ event, onClose, onConfirm }: CompletionDialog
       .catch(() => {});
   }, []);
 
-  // Group metrics by category
-  const metricsByCategory = allMetrics.reduce<Record<string, MetricOption[]>>((acc, m) => {
-    if (!acc[m.category]) acc[m.category] = [];
-    acc[m.category].push(m);
-    return acc;
-  }, {});
+  // (metrics grouped by category handled inside MetricPicker)
 
   // Update defaults when event changes
   useEffect(() => {
@@ -258,22 +245,12 @@ export function CompletionDialog({ event, onClose, onConfirm }: CompletionDialog
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
                 Log a Metric
               </p>
-              <select
+              <MetricPicker
+                metrics={allMetrics}
                 value={selectedMetricId}
-                onChange={(e) => setSelectedMetricId(e.target.value)}
-                className="w-full rounded-lg bg-[#1e1e30] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-indigo-500/50"
-              >
-                <option value="">Skip metric</option>
-                {Object.entries(metricsByCategory).map(([cat, mets]) => (
-                  <optgroup key={cat} label={CATEGORY_LABELS[cat] ?? cat}>
-                    {mets.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.icon} {m.name} ({m.unit})
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+                onChange={(id) => setSelectedMetricId(id)}
+                placeholder="Skip metric"
+              />
             </>
           )}
           {(event.taskMetric || selectedMetricId) && (

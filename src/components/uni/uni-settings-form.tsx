@@ -33,9 +33,10 @@ export function UniSettingsForm({ initialSettings, semesters: initialSemesters }
     setSaving(true);
     try {
       const formData = new FormData();
+      const skip = new Set(["id", "userId", "createdAt", "updatedAt", "enabled"]);
       Object.entries(settings).forEach(([key, value]) => {
-        if (key !== "id" && key !== "userId" && key !== "createdAt" && key !== "updatedAt" && key !== "enabled") {
-          formData.append(key, String(value || ""));
+        if (!skip.has(key)) {
+          formData.append(key, value != null ? String(value) : "");
         }
       });
       await saveUniSettings(formData);
@@ -165,6 +166,57 @@ export function UniSettingsForm({ initialSettings, semesters: initialSemesters }
             <p className="text-sm text-gray-400">
               Manage your semesters to organize courses, exams, and grades by academic period.
             </p>
+          </div>
+
+          {/* AI Configuration */}
+          <div className="p-6 bg-[#1e1e30] rounded-lg border border-[#2a2a3c] space-y-4">
+            <h3 className="text-lg font-semibold text-white">AI Configuration</h3>
+            <p className="text-sm text-gray-400">
+              Used for study plans, flashcards, note summaries, and AI study features.
+            </p>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">AI Provider</label>
+                <select
+                  name="aiProvider"
+                  value={settings?.aiProvider || "gemini"}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-2 bg-[#12121c] border border-[#2a2a3c] text-white rounded-lg focus:outline-none focus:border-blue-600 text-sm"
+                >
+                  <option value="gemini">Google Gemini</option>
+                  <option value="openai">OpenAI</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Model</label>
+                <input
+                  type="text"
+                  name="aiModel"
+                  value={settings?.aiModel || ""}
+                  onChange={handleInputChange}
+                  placeholder={settings?.aiProvider === "openai" ? "gpt-4o-mini" : "gemini-2.0-flash"}
+                  className="w-full px-4 py-2 bg-[#12121c] border border-[#2a2a3c] text-white rounded-lg focus:outline-none focus:border-blue-600 text-sm"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">API Key</label>
+              <input
+                type="password"
+                name="aiApiKey"
+                value={settings?.aiApiKey || ""}
+                onChange={handleInputChange}
+                placeholder={settings?.aiProvider === "openai" ? "sk-..." : "AIza..."}
+                className="w-full px-4 py-2 bg-[#12121c] border border-[#2a2a3c] text-white rounded-lg focus:outline-none focus:border-blue-600 text-sm"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                {settings?.aiProvider === "openai"
+                  ? "Get your key from platform.openai.com"
+                  : "Get your key from aistudio.google.com/apikey"}
+              </p>
+            </div>
           </div>
 
           {/* Moodle Integration */}

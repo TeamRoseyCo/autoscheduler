@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { syncAll } from "@/lib/actions/uni/moodle";
+import {
+  syncAll,
+  syncMoodleCourses,
+  syncMoodleGrades,
+  syncMoodleExams,
+  syncMoodleResources,
+} from "@/lib/actions/uni/moodle";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -10,14 +16,25 @@ export async function POST(request: NextRequest) {
 
   try {
     const data = await request.json();
-    const syncType = data.type || "all"; // all, courses, grades, exams, resources
+    const syncType = data.type || "all";
 
     let result;
-    if (syncType === "all") {
-      result = await syncAll();
-    } else {
-      // Delegate to specific sync functions
-      result = { success: true, message: `${syncType} sync initiated` };
+    switch (syncType) {
+      case "courses":
+        result = await syncMoodleCourses();
+        break;
+      case "grades":
+        result = await syncMoodleGrades();
+        break;
+      case "exams":
+        result = await syncMoodleExams();
+        break;
+      case "resources":
+        result = await syncMoodleResources();
+        break;
+      default:
+        result = await syncAll();
+        break;
     }
 
     return NextResponse.json(result);

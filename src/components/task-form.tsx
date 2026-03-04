@@ -4,17 +4,10 @@ import { useActionState, useRef, useEffect, useState } from "react";
 import { createTask, updateTask } from "@/lib/actions/tasks";
 import type { Task } from "@/generated/prisma/client";
 import type { ProjectWithCounts } from "@/lib/actions/projects";
-import { CATEGORY_LABELS } from "@/lib/preset-metrics";
+import { MetricPicker, type MetricOption } from "@/components/metric-picker";
+import { AppleEmoji } from "@/components/apple-emoji";
 
 const DURATION_PRESETS = [15, 30, 45, 60, 90, 120];
-
-interface MetricOption {
-  id: string;
-  name: string;
-  unit: string;
-  icon: string;
-  category: string;
-}
 
 interface TaskWithMetric extends Task {
   metric?: { id: string; name: string; unit: string; icon: string } | null;
@@ -66,12 +59,7 @@ export function TaskForm({
     }
   };
 
-  // Group metrics by category for the select
-  const metricsByCategory = metrics.reduce<Record<string, MetricOption[]>>((acc, m) => {
-    if (!acc[m.category]) acc[m.category] = [];
-    acc[m.category].push(m);
-    return acc;
-  }, {});
+  // (metrics grouped by category handled inside MetricPicker)
 
   const [state, formAction, isPending] = useActionState(
     async (_prev: { error?: string } | null, formData: FormData) => {
@@ -256,7 +244,7 @@ export function TaskForm({
         {selectedMetric ? (
           <div className="mt-1 flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/15 border border-indigo-500/25 px-3 py-1 text-sm text-indigo-300">
-              <span>{selectedMetric.icon}</span>
+              <AppleEmoji emoji={selectedMetric.icon} size={14} />
               <span>{selectedMetric.name}</span>
               <span className="text-indigo-400/60">({selectedMetric.unit})</span>
             </span>
@@ -265,29 +253,16 @@ export function TaskForm({
               onClick={() => setSelectedMetric(null)}
               className="text-gray-500 hover:text-gray-300 text-xs"
             >
-              \u2715
+              &#x2715;
             </button>
           </div>
         ) : (
-          <select
-            className="mt-1 block w-full rounded-md bg-[#12121c] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 shadow-sm focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30"
+          <MetricPicker
+            metrics={metrics}
             value=""
-            onChange={(e) => {
-              const m = metrics.find((m) => m.id === e.target.value);
-              if (m) setSelectedMetric(m);
-            }}
-          >
-            <option value="">No metric</option>
-            {Object.entries(metricsByCategory).map(([cat, mets]) => (
-              <optgroup key={cat} label={CATEGORY_LABELS[cat] ?? cat}>
-                {mets.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.icon} {m.name} ({m.unit})
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+            onChange={(_, m) => { if (m) setSelectedMetric(m); }}
+            className="mt-1"
+          />
         )}
       </div>
 

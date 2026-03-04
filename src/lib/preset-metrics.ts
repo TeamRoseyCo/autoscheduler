@@ -75,22 +75,24 @@ export const PRESET_METRICS: PresetMetric[] = [
   { name: "Responses Received", unit: "responses", icon: "💬", category: "outreach", aggregation: "sum" },
   { name: "Follow-ups Done", unit: "follow-ups", icon: "🔁", category: "outreach", aggregation: "sum" },
 
-  // relationships
-  { name: "Date Nights", unit: "dates", icon: "💑", category: "relationships", aggregation: "sum" },
-  { name: "Quality Time Together", unit: "hours", icon: "❤️", category: "relationships", aggregation: "sum" },
-  { name: "Love Letters Written", unit: "letters", icon: "💌", category: "relationships", aggregation: "sum" },
-  { name: "Surprises Given", unit: "surprises", icon: "🎁", category: "relationships", aggregation: "sum" },
-  { name: "Deep Conversations", unit: "conversations", icon: "💬", category: "relationships", aggregation: "sum" },
-  { name: "Relationship Check-ins", unit: "check-ins", icon: "🫶", category: "relationships", aggregation: "sum" },
-  { name: "Acts of Service", unit: "acts", icon: "🤲", category: "relationships", aggregation: "sum" },
-  { name: "Family Dinners", unit: "dinners", icon: "🍽️", category: "family", aggregation: "sum" },
-  { name: "Family Activities", unit: "activities", icon: "👨‍👩‍👧‍👦", category: "family", aggregation: "sum" },
-  { name: "Kids Quality Time", unit: "hours", icon: "👶", category: "family", aggregation: "sum" },
-  { name: "Family Outings", unit: "outings", icon: "🏞️", category: "family", aggregation: "sum" },
-  { name: "Calls to Parents", unit: "calls", icon: "📱", category: "family", aggregation: "sum" },
-  { name: "Family Game Nights", unit: "nights", icon: "🎲", category: "family", aggregation: "sum" },
-  { name: "Prayers Together", unit: "prayers", icon: "🤲", category: "family", aggregation: "sum" },
-  { name: "Marriage Goals Met", unit: "goals", icon: "💍", category: "relationships", aggregation: "sum" },
+  // love-family (Love & Family Life)
+  { name: "Date Nights", unit: "dates", icon: "💑", category: "love-family", aggregation: "sum" },
+  { name: "Quality Time Together", unit: "hours", icon: "❤️", category: "love-family", aggregation: "sum" },
+  { name: "Love Letters Written", unit: "letters", icon: "💌", category: "love-family", aggregation: "sum" },
+  { name: "Surprises Given", unit: "surprises", icon: "🎁", category: "love-family", aggregation: "sum" },
+  { name: "Deep Conversations", unit: "conversations", icon: "💬", category: "love-family", aggregation: "sum" },
+  { name: "Relationship Check-ins", unit: "check-ins", icon: "🫶", category: "love-family", aggregation: "sum" },
+  { name: "Acts of Service", unit: "acts", icon: "🤲", category: "love-family", aggregation: "sum" },
+  { name: "Marriage Goals Met", unit: "goals", icon: "💍", category: "love-family", aggregation: "sum" },
+  { name: "Romantic Gestures", unit: "gestures", icon: "🌹", category: "love-family", aggregation: "sum" },
+  { name: "Compliments Given", unit: "compliments", icon: "💕", category: "love-family", aggregation: "sum" },
+  { name: "Family Dinners", unit: "dinners", icon: "🍽️", category: "love-family", aggregation: "sum" },
+  { name: "Family Activities", unit: "activities", icon: "👨‍👩‍👧‍👦", category: "love-family", aggregation: "sum" },
+  { name: "Kids Quality Time", unit: "hours", icon: "👶", category: "love-family", aggregation: "sum" },
+  { name: "Family Outings", unit: "outings", icon: "🏞️", category: "love-family", aggregation: "sum" },
+  { name: "Calls to Parents", unit: "calls", icon: "📱", category: "love-family", aggregation: "sum" },
+  { name: "Family Game Nights", unit: "nights", icon: "🎲", category: "love-family", aggregation: "sum" },
+  { name: "Prayers Together", unit: "prayers", icon: "🤲", category: "love-family", aggregation: "sum" },
 ];
 
 export const CATEGORY_LABELS: Record<string, string> = {
@@ -105,6 +107,8 @@ export const CATEGORY_LABELS: Record<string, string> = {
   study: "Study",
   social: "Social Media",
   outreach: "Outreach",
-  relationships: "Love & Marriage",
-  family: "Family",
+  "love-family": "Love & Family Life",
+  // Legacy keys for backward compat with existing DB entries
+  relationships: "Love & Family Life",
+  family: "Love & Family Life",
 };

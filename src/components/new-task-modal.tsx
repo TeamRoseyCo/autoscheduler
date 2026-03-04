@@ -6,15 +6,8 @@ import { categorizeTask } from "@/lib/categorize";
 import { EmojiPicker } from "@/components/emoji-picker";
 import { DescriptionWand } from "@/components/description-wand";
 import type { ProjectWithCounts } from "@/lib/actions/projects";
-import { CATEGORY_LABELS } from "@/lib/preset-metrics";
-
-interface MetricOption {
-  id: string;
-  name: string;
-  unit: string;
-  icon: string;
-  category: string;
-}
+import { MetricPicker, type MetricOption } from "@/components/metric-picker";
+import { AppleEmoji } from "@/components/apple-emoji";
 
 interface NewTaskModalProps {
   isOpen: boolean;
@@ -90,12 +83,7 @@ export function NewTaskModal({ isOpen, onClose, onCreated, projects }: NewTaskMo
       .catch(() => {});
   }, []);
 
-  // Group metrics by category
-  const metricsByCategory = metrics.reduce<Record<string, MetricOption[]>>((acc, m) => {
-    if (!acc[m.category]) acc[m.category] = [];
-    acc[m.category].push(m);
-    return acc;
-  }, {});
+  // (metrics grouped by category handled inside MetricPicker)
 
   // Reset form when opened
   useEffect(() => {
@@ -441,7 +429,7 @@ export function NewTaskModal({ isOpen, onClose, onCreated, projects }: NewTaskMo
                 {selectedMetric ? (
                   <div className="flex items-center gap-2">
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/15 border border-indigo-500/25 px-3 py-1 text-xs text-indigo-300">
-                      <span>{selectedMetric.icon}</span>
+                      <AppleEmoji emoji={selectedMetric.icon} size={14} />
                       <span>{selectedMetric.name}</span>
                       <span className="text-indigo-400/60">({selectedMetric.unit})</span>
                     </span>
@@ -450,30 +438,17 @@ export function NewTaskModal({ isOpen, onClose, onCreated, projects }: NewTaskMo
                       onClick={() => setSelectedMetric(null)}
                       className="text-gray-500 hover:text-gray-300 text-xs"
                     >
-                      ✕
+                      &#x2715;
                     </button>
                   </div>
                 ) : (
                   <div className="flex gap-1.5">
-                    <select
-                      className="flex-1 bg-[#12121c] border border-[#2a2a3c] rounded-lg px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-indigo-500/50"
+                    <MetricPicker
+                      metrics={metrics}
                       value=""
-                      onChange={(e) => {
-                        const m = metrics.find((m) => m.id === e.target.value);
-                        if (m) setSelectedMetric(m);
-                      }}
-                    >
-                      <option value="">No metric</option>
-                      {Object.entries(metricsByCategory).map(([cat, mets]) => (
-                        <optgroup key={cat} label={CATEGORY_LABELS[cat] ?? cat}>
-                          {mets.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.icon} {m.name} ({m.unit})
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
+                      onChange={(_, m) => { if (m) setSelectedMetric(m); }}
+                      className="flex-1"
+                    />
                     <button
                       type="button"
                       onClick={handleAutoDetectMetric}
@@ -481,7 +456,7 @@ export function NewTaskModal({ isOpen, onClose, onCreated, projects }: NewTaskMo
                       title="AI suggest metric"
                       className="flex-shrink-0 rounded-lg border border-[#2a2a3c] px-2 py-1.5 text-xs text-gray-400 hover:text-gray-200 hover:bg-[#2a2a3c] transition-colors disabled:opacity-40"
                     >
-                      {isSuggestingMetric ? "..." : "✨"}
+                      {isSuggestingMetric ? "..." : "\u2728"}
                     </button>
                   </div>
                 )}

@@ -1,16 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { TaskCard } from "@/components/task-card";
+import { TaskCard, type TaskWithProject } from "@/components/task-card";
 import { TaskForm } from "@/components/task-form";
-import type { Task } from "@/generated/prisma/client";
 
 export function TaskList({
   activeTasks,
   completedTasks,
 }: {
-  activeTasks: Task[];
-  completedTasks: Task[];
+  activeTasks: TaskWithProject[];
+  completedTasks: TaskWithProject[];
 }) {
   const [tab, setTab] = useState<"active" | "completed">("active");
   const [showForm, setShowForm] = useState(false);

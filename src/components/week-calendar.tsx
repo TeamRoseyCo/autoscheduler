@@ -1614,6 +1614,7 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
             currentDate={currentDate}
             events={allEvents}
             onDateClick={handleDateSelect}
+            onEventClick={(ev) => setSelectedEvent(ev)}
           />
         ) : (
           <>

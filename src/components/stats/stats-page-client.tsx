@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { AppleEmoji } from "@/components/apple-emoji";
 import {
   PieChart,
   Pie,
@@ -70,6 +71,55 @@ interface StatsPageClientProps {
 }
 
 type Range = "week" | "month" | "year";
+
+function TrendMetricSelect({
+  metrics,
+  value,
+  onChange,
+}: {
+  metrics: MetricSummary[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = metrics.find((m) => m.metricId === value);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 rounded-xl bg-[#12121c]/80 border border-white/[0.06] px-3 py-1.5 text-sm text-gray-300 hover:border-white/[0.1] transition-colors"
+      >
+        {selected && <AppleEmoji emoji={selected.icon} size={14} />}
+        <span>{selected?.name ?? "Select metric"}</span>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className={`text-gray-500 transition-transform ${open ? "rotate-180" : ""}`}>
+          <path d="M2.5 4l2.5 2.5L7.5 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-50 bg-[#1e1e30] border border-[#2a2a3c] rounded-lg shadow-xl max-h-60 overflow-y-auto min-w-48">
+            {metrics.map((m) => (
+              <button
+                key={m.metricId}
+                type="button"
+                onClick={() => { onChange(m.metricId); setOpen(false); }}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-[#2a2a3c] transition-colors ${
+                  value === m.metricId ? "text-indigo-300 bg-indigo-500/10" : "text-gray-300"
+                }`}
+              >
+                <AppleEmoji emoji={m.icon} size={14} />
+                <span>{m.name}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 const RANGE_LABELS: Record<Range, string> = {
   week: "This Week",
@@ -695,7 +745,7 @@ export function StatsPageClient({ initialData }: StatsPageClientProps) {
                       />
                       <div className="relative">
                         <div className="flex items-start justify-between mb-2">
-                          <span className="text-xl">{m.icon}</span>
+                          <AppleEmoji emoji={m.icon} size={22} />
                           {trend && (
                             <span
                               className={`text-[11px] font-medium px-1.5 py-0.5 rounded-md ${
@@ -732,17 +782,13 @@ export function StatsPageClient({ initialData }: StatsPageClientProps) {
                   <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
                   Trend
                 </h2>
-                <select
-                  value={selectedMetricId ?? trendMetric?.metricId ?? ""}
-                  onChange={(e) => setSelectedMetricId(e.target.value || null)}
-                  className="ml-auto rounded-xl bg-[#12121c]/80 border border-white/[0.06] px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-indigo-500/30 transition-colors"
-                >
-                  {metricSummaries.map((m) => (
-                    <option key={m.metricId} value={m.metricId}>
-                      {m.icon} {m.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="ml-auto relative">
+                  <TrendMetricSelect
+                    metrics={metricSummaries}
+                    value={selectedMetricId ?? trendMetric?.metricId ?? ""}
+                    onChange={(id) => setSelectedMetricId(id || null)}
+                  />
+                </div>
               </div>
               {trendData.length === 0 ? (
                 <div className="flex items-center justify-center h-48 text-sm text-gray-600">

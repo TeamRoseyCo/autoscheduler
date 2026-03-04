@@ -209,7 +209,14 @@ model UniSettings {
   moodleUrl       String?
   moodleToken     String?
   moodleUserId    Int?
+  stagUrl         String?                    // e.g. "https://stagservices.upol.cz"
+  stagTicket      String?                    // login ticket for STAG API
+  stagOsCislo     String?                    // student personal number
+  stagUser        String?                    // stagUser role identifier (e.g. "F12345")
   customScaleJson String?                    // JSON: [{letter, minPercent, gpa}]
+  aiProvider      String?                    // "gemini"|"openai"
+  aiApiKey        String?
+  aiModel         String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }

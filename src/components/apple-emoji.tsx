@@ -9,8 +9,7 @@ function emojiToCodepoints(emoji: string): string {
   const codepoints: string[] = [];
   for (const char of emoji) {
     const cp = char.codePointAt(0);
-    if (cp !== undefined && cp !== 0xfe0f) {
-      // Skip variation selector U+FE0F
+    if (cp !== undefined) {
       codepoints.push(cp.toString(16));
     }
   }

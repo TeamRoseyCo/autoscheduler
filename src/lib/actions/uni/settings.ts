@@ -4,15 +4,33 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod/v4";
 
+// Transform empty strings to undefined so optional numbers don't fail
+const optionalNumber = z.preprocess(
+  (val) => (val === "" || val === null || val === undefined ? undefined : val),
+  z.coerce.number().optional()
+);
+
+const optionalString = z.preprocess(
+  (val) => (val === "" || val === null ? undefined : val),
+  z.string().optional()
+);
+
 const uniSettingsSchema = z.object({
-  universityName: z.string().optional(),
-  studentName: z.string().optional(),
+  universityName: optionalString,
+  studentName: optionalString,
   gradeScale: z.enum(["4.0", "4.3", "percentage", "custom"]).default("4.0"),
-  targetGPA: z.coerce.number().optional(),
-  moodleUrl: z.string().optional(),
-  moodleToken: z.string().optional(),
-  moodleUserId: z.coerce.number().optional(),
-  customScaleJson: z.string().optional(),
+  targetGPA: optionalNumber,
+  moodleUrl: optionalString,
+  moodleToken: optionalString,
+  moodleUserId: optionalNumber,
+  stagUrl: optionalString,
+  stagTicket: optionalString,
+  stagOsCislo: optionalString,
+  stagUser: optionalString,
+  customScaleJson: optionalString,
+  aiProvider: optionalString,
+  aiApiKey: optionalString,
+  aiModel: optionalString,
 });
 
 export async function getUniSettings() {

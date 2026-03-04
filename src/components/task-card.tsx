@@ -5,10 +5,12 @@ import { setTaskStatus, deleteTask } from "@/lib/actions/tasks";
 import { TaskForm } from "@/components/task-form";
 import { formatDuration, getColorClasses } from "@/lib/utils";
 import { EmojiText } from "@/components/emoji-text";
-import type { Task, Project } from "@/generated/prisma/client";
+import { AppleEmoji } from "@/components/apple-emoji";
+import type { Task, Project, MetricDefinition } from "@/generated/prisma/client";
 
-type TaskWithProject = Task & {
+export type TaskWithProject = Task & {
   project?: Pick<Project, "id" | "name" | "color"> | null;
+  metric?: Pick<MetricDefinition, "id" | "name" | "unit" | "icon"> | null;
 };
 
 type TaskStatus = "todo" | "in_progress" | "completed" | "cancelled" | "blocked";
@@ -154,6 +156,12 @@ export function TaskCard({ task }: { task: TaskWithProject }) {
               <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-[#2a2a3c] text-gray-300">
                 <span className={`w-2 h-2 rounded-full ${PROJECT_DOT[task.project.color] || "bg-gray-400"}`} />
                 {task.project.name}
+              </span>
+            )}
+            {task.metric && (
+              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-indigo-500/15 text-indigo-300 border border-indigo-500/20">
+                <AppleEmoji emoji={task.metric.icon} size={12} />
+                {task.metric.name}
               </span>
             )}
           </div>
