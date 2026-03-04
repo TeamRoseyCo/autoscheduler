@@ -115,12 +115,14 @@ export function StagPanel({ settings }: StagPanelProps) {
     setError("");
     try {
       const cleanUrl = stagUrl.trim().replace(/\/+$/, "");
+      // Auto-fix portal URL to API URL
+      const apiUrl = cleanUrl.replace(/\/\/stag\.(?!services|ws)/, "//stagservices.");
       // Save directly — student number will be auto-detected on first sync
       const res = await fetch("/api/uni/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          stagUrl: cleanUrl,
+          stagUrl: apiUrl,
           stagTicket: manualTicket.trim(),
         }),
       });

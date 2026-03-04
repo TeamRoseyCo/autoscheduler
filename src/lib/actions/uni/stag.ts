@@ -16,7 +16,11 @@ interface StagApiOptions {
 }
 
 async function callStagApi({ stagUrl, ticket, service, operation, params = {}, stagUser }: StagApiOptions) {
-  const baseUrl = stagUrl.replace(/\/+$/, "");
+  let baseUrl = stagUrl.replace(/\/+$/, "");
+
+  // Auto-fix common URL mistakes: stag.upol.cz → stagservices.upol.cz
+  // The portal (stag.X) is not the API — the API is at stagservices.X or stag-ws.X
+  baseUrl = baseUrl.replace(/\/\/stag\.(?!services|ws)/, "//stagservices.");
 
   const searchParams = new URLSearchParams({
     ...params,
