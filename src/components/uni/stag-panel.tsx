@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { testStagConnection, disconnectStag, saveStagTicket } from "@/lib/actions/uni/stag";
+import { testStagConnection, disconnectStag } from "@/lib/actions/uni/stag";
 
 interface StagPanelProps {
   settings: any;
@@ -115,9 +115,18 @@ export function StagPanel({ settings }: StagPanelProps) {
     setError("");
     try {
       const cleanUrl = stagUrl.trim().replace(/\/+$/, "");
-      const result = await saveStagTicket(cleanUrl, manualTicket.trim());
-      setMessage(`Connected as ${result.stagUser || result.osCislo || "student"}`);
-      setTimeout(() => setMessage(""), 3000);
+      // Save directly — student number will be auto-detected on first sync
+      const res = await fetch("/api/uni/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stagUrl: cleanUrl,
+          stagTicket: manualTicket.trim(),
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      setMessage("Connected to STAG! Your student info will be detected on first sync.");
+      setTimeout(() => setMessage(""), 5000);
       router.refresh();
     } catch (e: any) {
       setError(e.message || "Failed to connect");

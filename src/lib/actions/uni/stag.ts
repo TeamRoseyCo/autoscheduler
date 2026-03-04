@@ -112,6 +112,57 @@ export async function saveStagTicket(
   return { success: true, stagUser: stagUser || osCislo, osCislo: osCislo || stagUser };
 }
 
+// ── Auto-resolve student number if missing ───────────────────────────
+
+async function resolveOsCislo(
+  settings: { stagUrl: string; stagTicket: string; stagOsCislo?: string | null; stagUser?: string | null },
+  userId: string
+): Promise<{ osCislo: string; stagUser: string }> {
+  if (settings.stagOsCislo) {
+    return { osCislo: settings.stagOsCislo, stagUser: settings.stagUser || settings.stagOsCislo };
+  }
+
+  // Fetch from API
+  const rolesData = await callStagApi({
+    stagUrl: settings.stagUrl,
+    ticket: settings.stagTicket,
+    service: "help",
+    operation: "getStagUserListForLoginTicket",
+    params: { ticket: settings.stagTicket },
+  });
+
+  const users = rolesData?.stagUserList?.stagUserInfo;
+  const userList = Array.isArray(users) ? users : users ? [users] : [];
+
+  let osCislo = "";
+  let stagUser = "";
+
+  for (const u of userList) {
+    if (u.role === "ST") {
+      stagUser = u.userName || "";
+      osCislo = u.osCislo || u.userName || "";
+      break;
+    }
+  }
+
+  if (!osCislo && userList.length > 0) {
+    osCislo = userList[0].osCislo || userList[0].userName || "";
+    stagUser = userList[0].userName || "";
+  }
+
+  if (!osCislo) {
+    throw new Error("Could not detect your student number from STAG. Check your ticket.");
+  }
+
+  // Save for future use
+  await prisma.uniSettings.update({
+    where: { userId },
+    data: { stagOsCislo: osCislo, stagUser: stagUser || osCislo },
+  });
+
+  return { osCislo, stagUser: stagUser || osCislo };
+}
+
 // ── Test connection ──────────────────────────────────────────────────
 
 export async function testStagConnection() {
@@ -173,9 +224,11 @@ export async function syncStagCourses() {
   if (!session?.user?.id) throw new Error("Not authenticated");
 
   const settings = await getUniSettings();
-  if (!settings?.stagUrl || !settings?.stagTicket || !settings?.stagOsCislo) {
+  if (!settings?.stagUrl || !settings?.stagTicket) {
     throw new Error("STAG not connected");
   }
+
+  const { osCislo, stagUser } = await resolveOsCislo(settings as any, session.user.id);
 
   // Get current academic year info
   const now = new Date();
@@ -208,11 +261,11 @@ export async function syncStagCourses() {
         service: "predmety",
         operation: "getPredmetyByStudent",
         params: {
-          osCislo: settings.stagOsCislo,
+          osCislo,
           rok: year.toString(),
           semestr: sem.stagSemestr,
         },
-        stagUser: settings.stagUser || settings.stagOsCislo,
+        stagUser,
       });
 
       const courses = data?.predmetyStudenta?.predmetStudenta;
@@ -293,9 +346,11 @@ export async function syncStagGrades() {
   if (!session?.user?.id) throw new Error("Not authenticated");
 
   const settings = await getUniSettings();
-  if (!settings?.stagUrl || !settings?.stagTicket || !settings?.stagOsCislo) {
+  if (!settings?.stagUrl || !settings?.stagTicket) {
     throw new Error("STAG not connected");
   }
+
+  const { osCislo, stagUser } = await resolveOsCislo(settings as any, session.user.id);
 
   try {
     const data = await callStagApi({
@@ -303,10 +358,8 @@ export async function syncStagGrades() {
       ticket: settings.stagTicket,
       service: "znamky",
       operation: "getZnamkyByStudent",
-      params: {
-        osCislo: settings.stagOsCislo,
-      },
-      stagUser: settings.stagUser || settings.stagOsCislo,
+      params: { osCislo },
+      stagUser,
     });
 
     const grades = data?.studentZnam662?.znamkaInfo;
@@ -363,9 +416,11 @@ export async function syncStagExams() {
   if (!session?.user?.id) throw new Error("Not authenticated");
 
   const settings = await getUniSettings();
-  if (!settings?.stagUrl || !settings?.stagTicket || !settings?.stagOsCislo) {
+  if (!settings?.stagUrl || !settings?.stagTicket) {
     throw new Error("STAG not connected");
   }
+
+  const { osCislo, stagUser } = await resolveOsCislo(settings as any, session.user.id);
 
   try {
     const data = await callStagApi({
@@ -373,10 +428,8 @@ export async function syncStagExams() {
       ticket: settings.stagTicket,
       service: "terminy",
       operation: "getTerminyProStudenta",
-      params: {
-        osCislo: settings.stagOsCislo,
-      },
-      stagUser: settings.stagUser || settings.stagOsCislo,
+      params: { osCislo },
+      stagUser,
     });
 
     const exams = data?.terminyPredmetu?.terminPredmetu;
@@ -443,9 +496,11 @@ export async function syncStagSchedule() {
   if (!session?.user?.id) throw new Error("Not authenticated");
 
   const settings = await getUniSettings();
-  if (!settings?.stagUrl || !settings?.stagTicket || !settings?.stagOsCislo) {
+  if (!settings?.stagUrl || !settings?.stagTicket) {
     throw new Error("STAG not connected");
   }
+
+  const { osCislo, stagUser } = await resolveOsCislo(settings as any, session.user.id);
 
   const now = new Date();
   const month = now.getMonth();
@@ -459,11 +514,11 @@ export async function syncStagSchedule() {
       service: "rozvrhy",
       operation: "getRozvrhByStudent",
       params: {
-        osCislo: settings.stagOsCislo,
+        osCislo,
         rok: year.toString(),
         semestr,
       },
-      stagUser: settings.stagUser || settings.stagOsCislo,
+      stagUser,
     });
 
     const events = data?.rozpisSemestru?.rozpisSemestruDen;
