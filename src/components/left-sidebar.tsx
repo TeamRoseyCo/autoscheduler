@@ -11,6 +11,7 @@ interface LeftSidebarProps {
   collapsed?: boolean;
   onToggle?: () => void;
   onSearchClick?: () => void;
+  onHabitsClick?: () => void;
   projects?: ProjectWithCounts[];
   onAddProjectClick?: () => void;
   onAIProjectClick?: () => void;
@@ -32,6 +33,7 @@ function SidebarLink({
   active,
   badge,
   collapsed,
+  onClick,
 }: {
   href: string;
   icon: React.ReactNode;
@@ -39,41 +41,45 @@ function SidebarLink({
   active: boolean;
   badge?: string;
   collapsed?: boolean;
+  onClick?: () => void;
 }) {
+  const baseCollapsed = `flex items-center justify-center rounded-lg p-2 transition-colors ${
+    active ? "bg-[#2a2a40] text-white" : "text-gray-400 hover:bg-[#1e1e30] hover:text-gray-200"
+  }`;
+  const baseExpanded = `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+    active ? "bg-[#2a2a40] text-white" : "text-gray-400 hover:bg-[#1e1e30] hover:text-gray-200"
+  }`;
+
+  if (onClick) {
+    if (collapsed) {
+      return (
+        <button onClick={onClick} title={label} className={baseCollapsed + " w-full"}>
+          <span className="w-5 h-5 flex items-center justify-center opacity-70">{icon}</span>
+        </button>
+      );
+    }
+    return (
+      <button onClick={onClick} className={baseExpanded + " w-full text-left"}>
+        <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center opacity-70">{icon}</span>
+        <span className="truncate">{label}</span>
+        {badge && <span className="ml-auto text-[11px] text-gray-500 truncate">{badge}</span>}
+      </button>
+    );
+  }
+
   if (collapsed) {
     return (
-      <Link
-        href={href}
-        title={label}
-        className={`flex items-center justify-center rounded-lg p-2 transition-colors ${
-          active
-            ? "bg-[#2a2a40] text-white"
-            : "text-gray-400 hover:bg-[#1e1e30] hover:text-gray-200"
-        }`}
-      >
-        <span className="w-5 h-5 flex items-center justify-center opacity-70">
-          {icon}
-        </span>
+      <Link href={href} title={label} className={baseCollapsed}>
+        <span className="w-5 h-5 flex items-center justify-center opacity-70">{icon}</span>
       </Link>
     );
   }
 
   return (
-    <Link
-      href={href}
-      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-        active
-          ? "bg-[#2a2a40] text-white"
-          : "text-gray-400 hover:bg-[#1e1e30] hover:text-gray-200"
-      }`}
-    >
-      <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center opacity-70">
-        {icon}
-      </span>
+    <Link href={href} className={baseExpanded}>
+      <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center opacity-70">{icon}</span>
       <span className="truncate">{label}</span>
-      {badge && (
-        <span className="ml-auto text-[11px] text-gray-500 truncate">{badge}</span>
-      )}
+      {badge && <span className="ml-auto text-[11px] text-gray-500 truncate">{badge}</span>}
     </Link>
   );
 }
@@ -102,6 +108,14 @@ const TasksIcon = (
   </svg>
 );
 
+const HabitsIcon = (
+  <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+    <path d="M3 9a6 6 0 1012 0A6 6 0 003 9z" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M9 5v4l2.5 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M1.5 9H3M15 9h1.5M9 1.5V3M9 15v1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
 const StatsIcon = (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
     <rect x="2" y="10" width="3" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
@@ -121,6 +135,7 @@ export function LeftSidebar({
   collapsed = false,
   onToggle,
   onSearchClick,
+  onHabitsClick,
   projects = [],
   onAddProjectClick,
   onAIProjectClick,
@@ -152,6 +167,7 @@ export function LeftSidebar({
         <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
           <SidebarLink href="/" icon={CalendarIcon} label="Calendar" active={pathname === "/"} collapsed />
           <SidebarLink href="/tasks" icon={TasksIcon} label="Tasks" active={pathname === "/tasks"} collapsed />
+          <SidebarLink href="/habits" icon={HabitsIcon} label="Habits" active={false} collapsed onClick={onHabitsClick} />
           <SidebarLink href="/stats" icon={StatsIcon} label="Stats" active={pathname === "/stats"} collapsed />
           <SidebarLink href="/settings" icon={SettingsIcon} label="Settings" active={pathname === "/settings"} collapsed />
           <UniSidebarSection collapsed />
@@ -233,6 +249,14 @@ export function LeftSidebar({
           icon={TasksIcon}
           label="Tasks"
           active={pathname === "/tasks"}
+        />
+
+        <SidebarLink
+          href="/habits"
+          icon={HabitsIcon}
+          label="Habits"
+          active={false}
+          onClick={onHabitsClick}
         />
 
         <SidebarLink

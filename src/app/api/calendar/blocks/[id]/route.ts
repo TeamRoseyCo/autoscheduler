@@ -27,6 +27,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Block not found" }, { status: 404 });
     }
 
+    // Enforce lock: only allow unlocking (locked=false) when the block is locked
+    if (existing.locked && body.locked !== false) {
+      return NextResponse.json({ error: "Event is locked. Unlock it first to make changes." }, { status: 403 });
+    }
+
     const updateData: Record<string, unknown> = {};
 
     if (body.startTime) {
@@ -68,6 +73,9 @@ export async function PATCH(
     if (body.transportMode !== undefined) {
       updateData.transportMode = body.transportMode || null;
     }
+    if (body.locked !== undefined) {
+      updateData.locked = Boolean(body.locked);
+    }
 
     const updated = await prisma.scheduledBlock.update({
       where: { id },
@@ -87,6 +95,14 @@ export async function PATCH(
       } catch {
         // Ignore — may have been deleted externally
       }
+    }
+
+    // Auto-lock when marking as completed
+    if (body.status === "completed") {
+      await prisma.scheduledBlock.update({
+        where: { id },
+        data: { locked: true },
+      });
     }
 
     // When marking as completed, sync to Google Calendar with the actual times.
@@ -182,6 +198,19 @@ export async function DELETE(
 
     if (!existing) {
       return NextResponse.json({ error: "Block not found" }, { status: 404 });
+    }
+
+    if (existing.locked) {
+      return NextResponse.json({ error: "Event is locked. Unlock it first to delete." }, { status: 403 });
+    }
+
+    // If synced to Google Calendar, delete the Google event too
+    if (existing.googleEventId) {
+      try {
+        await deleteCalendarEvent(session.user.id, existing.googleEventId);
+      } catch {
+        // Ignore — may have already been deleted on Google
+      }
     }
 
     await prisma.scheduledBlock.delete({

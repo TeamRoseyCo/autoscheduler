@@ -5,7 +5,7 @@ import { ChatAssistant } from "@/components/chat-assistant";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <SessionProvider>
+    <SessionProvider refetchInterval={0} refetchOnWindowFocus={false}>
       {children}
       <ChatAssistant />
     </SessionProvider>

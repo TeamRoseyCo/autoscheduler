@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 
+export type RescheduleWhen = "sooner" | "today" | "this_week" | "this_month";
+
 interface EventContextMenuProps {
   x: number;
   y: number;
@@ -10,7 +12,7 @@ interface EventContextMenuProps {
   onStartTask: () => void;
   onStopTask: () => void;
   onMarkComplete: () => void;
-  onReschedule: () => void;
+  onReschedule: (when: RescheduleWhen) => void;
   onClose: () => void;
 }
 
@@ -112,14 +114,51 @@ export function EventContextMenu({
         <>
           <div className="h-px bg-[#2a2a3c] my-1" />
           <button
-            onClick={() => { onReschedule(); onClose(); }}
+            onClick={() => { onReschedule("sooner"); onClose(); }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-300 hover:bg-[#2a2a3c] transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-emerald-400">
+              <path d="M7 12.5V4M7 4l-3 3M7 4l3 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M3 1.5h8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+            </svg>
+            Reschedule Sooner
+          </button>
+          <div className="h-px bg-[#2a2a3c] my-1" />
+          <div className="px-2.5 py-1.5 text-[11px] font-medium text-gray-500 uppercase tracking-wider">
+            Do it later
+          </div>
+          <button
+            onClick={() => { onReschedule("today"); onClose(); }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-300 hover:bg-[#2a2a3c] transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-amber-400">
+              <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.2" />
+              <path d="M7 3.5v4l2.5 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Later Today
+          </button>
+          <button
+            onClick={() => { onReschedule("this_week"); onClose(); }}
             className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-300 hover:bg-[#2a2a3c] transition-colors"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-blue-400">
-              <path d="M7 1v4l3 2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M12.5 7A5.5 5.5 0 111.5 7a5.5 5.5 0 0111 0z" stroke="currentColor" strokeWidth="1.2" />
+              <rect x="1.5" y="2.5" width="11" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+              <path d="M1.5 5.5h11" stroke="currentColor" strokeWidth="1.2" />
+              <path d="M4.5 1v2.5M9.5 1v2.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
             </svg>
-            Reschedule for Later
+            Later This Week
+          </button>
+          <button
+            onClick={() => { onReschedule("this_month"); onClose(); }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-300 hover:bg-[#2a2a3c] transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-purple-400">
+              <rect x="1.5" y="2.5" width="11" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+              <path d="M1.5 5.5h11" stroke="currentColor" strokeWidth="1.2" />
+              <path d="M4.5 1v2.5M9.5 1v2.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+              <circle cx="7" cy="8.5" r="1.5" fill="currentColor" className="text-purple-400" />
+            </svg>
+            Later This Month
           </button>
         </>
       )}

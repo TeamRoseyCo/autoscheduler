@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import OpenAI from "openai";
 import { getOpenAIClient } from "@/lib/openai";
-import { autoScheduleTask } from "@/lib/local-scheduler";
+import { autoScheduleTask, rescheduleAllTasks } from "@/lib/local-scheduler";
 import { revalidatePath } from "next/cache";
 
 export async function POST(req: Request) {
@@ -197,12 +197,6 @@ ${projectsSummary}
               },
             });
 
-            try {
-              await autoScheduleTask(userId, task.id);
-            } catch {
-              // Non-blocking
-            }
-
             revalidatePath("/");
             revalidatePath("/tasks");
 
@@ -221,6 +215,15 @@ ${projectsSummary}
               success: false,
             });
           }
+        }
+      }
+
+      // Reschedule all tasks in priority order after batch creation
+      if (createdTitles.length > 0) {
+        try {
+          await rescheduleAllTasks(userId);
+        } catch {
+          // Non-blocking
         }
       }
 

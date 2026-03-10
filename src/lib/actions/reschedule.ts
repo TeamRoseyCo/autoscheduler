@@ -69,7 +69,10 @@ export async function rescheduleOverdueTasks(userId: string) {
  * Reschedule a specific block to the next available free slot.
  * Deletes the current block and creates a new one at the next free time.
  */
-export async function rescheduleBlockForLater(blockId: string) {
+export async function rescheduleBlockForLater(
+  blockId: string,
+  when: "sooner" | "today" | "this_week" | "this_month" = "this_week"
+) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Not authenticated");
 
@@ -87,19 +90,56 @@ export async function rescheduleBlockForLater(blockId: string) {
   const durationMs = new Date(block.endTime).getTime() - new Date(block.startTime).getTime();
   const durationMinutes = Math.round(durationMs / 60000);
 
+  const now = new Date();
+
+  // Compute searchFrom and maxDays based on `when`
+  let searchFrom: Date;
+  let maxDays: number;
+  let label: string;
+
+  if (when === "sooner") {
+    // Find the earliest available slot from now
+    searchFrom = now;
+    maxDays = 7;
+    label = "the next 7 days";
+  } else if (when === "today") {
+    // Later today — search from after the block's end, only today
+    searchFrom = new Date(Math.max(block.endTime.getTime(), now.getTime()));
+    maxDays = 1;
+    label = "today";
+  } else if (when === "this_week") {
+    // Last 3 days of the coming week (days 5-7 from now)
+    const start = new Date(now);
+    start.setDate(start.getDate() + 4);
+    start.setHours(0, 0, 0, 0);
+    searchFrom = start;
+    maxDays = 3;
+    label = "this week";
+  } else {
+    // Last week of the month (days 23-30 from now)
+    const start = new Date(now);
+    start.setDate(start.getDate() + 23);
+    start.setHours(0, 0, 0, 0);
+    searchFrom = start;
+    maxDays = 7;
+    label = "this month";
+  }
+
   // Delete the current block first so its time slot becomes free
   await prisma.scheduledBlock.delete({ where: { id: blockId } });
 
-  // Find the next free slot
+  // Find the next free slot within the requested range
   const slot = await findNextFreeSlot(
     session.user.id,
     durationMinutes,
     block.task?.preferredTimeWindow,
-    block.task?.energyType
+    block.task?.energyType,
+    searchFrom,
+    maxDays
   );
 
   if (!slot) {
-    return { success: false, message: "No available slot found in the next 7 days" };
+    return { success: false, message: `No available slot found ${label}` };
   }
 
   // Create a new block at the found slot

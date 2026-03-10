@@ -34,6 +34,10 @@ model User {
   uniSummaries   UniClassSummary[]
   uniResources   UniResource[]
   uniMoodleSyncs UniMoodleSync[]
+  habits          Habit[]
+  habitGenerations HabitGeneration[]
+  smartImportConfigs SmartImportConfig[]
+  smartImportEvents  SmartImportEvent[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -86,6 +90,7 @@ model Project {
   updatedAt   DateTime @updatedAt
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tasks       Task[]
+  habits      Habit[]
 }
 
 model Task {
@@ -94,6 +99,7 @@ model Task {
   title               String
   durationMinutes     Int
   deadline            DateTime?
+  deadlineTime        String?  // HH:MM — optional time for the deadline
   priority            String   @default("medium") // asap, high, medium, low
   energyType          String   @default("deep")   // deep, light, admin
   preferredTimeWindow String?  // e.g. "morning", "afternoon", "evening"
@@ -128,6 +134,7 @@ model ScheduledBlock {
   transportBefore Int?      // travel minutes before event
   transportAfter  Int?      // travel minutes after event
   transportMode   String?   // "driving" | "transit" | "walking" | "cycling"
+  locked          Boolean   @default(false)
   createdAt       DateTime  @default(now())
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   task            Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
@@ -368,4 +375,80 @@ model UniMoodleSync {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, dataType])
+}
+
+// ─── Habit Generator Models ───
+
+model Habit {
+  id              String   @id @default(cuid())
+  userId          String
+  title           String
+  emoji           String   @default("🔄")
+  durationMinutes Int      @default(30)
+  frequency       String   @default("daily") // "daily" | "weekdays" | "1,3,5" (CSV day numbers, 0=Sun)
+  projectId       String?
+  preferredTime   String?  // "morning" | "afternoon" | "evening"
+  energyType      String   @default("light")
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+}
+
+// ─── Smart Import v2 Models ───
+
+model SmartImportConfig {
+  id              String   @id @default(cuid())
+  userId          String
+  name            String
+  sourceType      String   // "gmail"
+  enabled         Boolean  @default(true)
+  gmailQuery      String?
+  lastScanAt      DateTime?
+  lastScanStatus  String?  // "success" | "error" | "scanning"
+  lastScanError   String?
+  lastScanCount   Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pendingEvents   SmartImportEvent[]
+}
+
+model SmartImportEvent {
+  id               String   @id @default(cuid())
+  userId           String
+  configId         String?
+  title            String
+  date             String   // YYYY-MM-DD
+  startTime        String   // HH:MM
+  endTime          String   // HH:MM
+  location         String?
+  description      String?
+  eventType        String   // meeting|travel|appointment|social|deadline|reminder|class|other
+  color            String   @default("gray")
+  confidence       Float    @default(0.7)
+  source           String   // "text" | "ics" | "email" | "gmail" | "natural_language"
+  sourceRef        String?  // Gmail message ID for dedup
+  status           String   @default("pending") // "pending" | "approved" | "rejected" | "created"
+  suggestedByAI    Boolean  @default(false)
+  scheduledBlockId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  config           SmartImportConfig? @relation(fields: [configId], references: [id], onDelete: SetNull)
+}
+
+model HabitGeneration {
+  id        String   @id @default(cuid())
+  userId    String
+  habitId   String
+  taskId    String
+  weekStart String   // "YYYY-MM-DD" Monday of target week
+  date      String   // "YYYY-MM-DD" specific day
+  status    String   @default("pending") // "pending" | "completed" | "skipped" | "rescheduled"
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, date])
 }

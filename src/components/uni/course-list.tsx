@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { SemesterModal } from "./semester-modal";
 import { CourseFormModal } from "./course-form-modal";
+import { MergeCourseModal } from "./merge-course-modal";
 
 const COLOR_MAP: Record<string, string> = {
   indigo: "bg-indigo-500", blue: "bg-blue-500", green: "bg-green-500",
@@ -34,6 +35,7 @@ export function CourseList({ courses: initialCourses, semesters: initialSemester
   const [semesterFilter, setSemesterFilter] = useState("current");
   const [showSemesterModal, setShowSemesterModal] = useState(false);
   const [showCourseModal, setShowCourseModal] = useState(false);
+  const [mergeSource, setMergeSource] = useState<any>(null);
 
   const currentSemester = initialSemesters.find((s: any) => s.isCurrent);
   const filteredCourses = initialCourses.filter((c: any) => {
@@ -139,7 +141,7 @@ export function CourseList({ courses: initialCourses, semesters: initialSemester
               <div
                 key={course.id}
                 onClick={() => router.push(`/uni/courses/${course.id}`)}
-                className={`p-4 rounded-lg bg-[#12121c] border border-[#2a2a3c] border-l-4 ${BORDER_COLOR_MAP[course.color] || "border-l-indigo-500"} cursor-pointer hover:bg-[#1a1a2e] transition-colors`}
+                className={`relative p-4 rounded-lg bg-[#12121c] border border-[#2a2a3c] border-l-4 ${BORDER_COLOR_MAP[course.color] || "border-l-indigo-500"} cursor-pointer hover:bg-[#1a1a2e] transition-colors group`}
               >
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-2">
@@ -164,6 +166,12 @@ export function CourseList({ courses: initialCourses, semesters: initialSemester
                   <span>{notesCount} notes</span>
                   <span>{resourcesCount} resources</span>
                 </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setMergeSource(course); }}
+                  className="absolute top-2 right-2 px-2 py-0.5 text-[10px] text-gray-500 hover:text-amber-400 hover:bg-amber-500/10 rounded opacity-0 group-hover:opacity-100 transition-all"
+                >
+                  Merge
+                </button>
               </div>
             );
           })}
@@ -181,6 +189,13 @@ export function CourseList({ courses: initialCourses, semesters: initialSemester
         onClose={() => setShowCourseModal(false)}
         onSaved={handleSaved}
         semesters={initialSemesters}
+      />
+      <MergeCourseModal
+        isOpen={!!mergeSource}
+        onClose={() => setMergeSource(null)}
+        onSaved={handleSaved}
+        sourceCourse={mergeSource}
+        allCourses={initialCourses}
       />
     </div>
   );

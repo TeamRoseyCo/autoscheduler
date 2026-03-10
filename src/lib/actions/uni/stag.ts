@@ -25,6 +25,7 @@ async function callStagApi({ stagUrl, ticket, service, operation, params = {}, s
   const searchParams = new URLSearchParams({
     ...params,
     outputFormat: "JSON",
+    stagUserTicket: ticket,
     ...(stagUser ? { stagUser } : {}),
   });
 
@@ -33,13 +34,16 @@ async function callStagApi({ stagUrl, ticket, service, operation, params = {}, s
   const response = await fetch(url, {
     headers: {
       Authorization: "Basic " + Buffer.from(ticket + ":").toString("base64"),
+      Cookie: `WSCOOKIE=${ticket}`,
       Accept: "application/json",
     },
   });
 
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) {
-      throw new Error("STAG session expired. Please sign in again.");
+      throw new Error(
+        `STAG session expired (${response.status}). Click "Re-login" to get a fresh ticket.`
+      );
     }
     throw new Error(`STAG API error: ${response.status} ${response.statusText}`);
   }
@@ -127,13 +131,21 @@ async function resolveOsCislo(
   }
 
   // Fetch from API
-  const rolesData = await callStagApi({
-    stagUrl: settings.stagUrl,
-    ticket: settings.stagTicket,
-    service: "help",
-    operation: "getStagUserListForLoginTicket",
-    params: { ticket: settings.stagTicket },
-  });
+  let rolesData: any;
+  try {
+    rolesData = await callStagApi({
+      stagUrl: settings.stagUrl,
+      ticket: settings.stagTicket,
+      service: "help",
+      operation: "getStagUserListForLoginTicket",
+      params: { ticket: settings.stagTicket },
+    });
+  } catch (e) {
+    throw new Error(
+      `Could not detect your student number — STAG API call failed: ${e instanceof Error ? e.message : String(e)}. ` +
+      `Go to STAG settings and enter your student number (osCislo) manually.`
+    );
+  }
 
   const users = rolesData?.stagUserList?.stagUserInfo;
   const userList = Array.isArray(users) ? users : users ? [users] : [];
@@ -155,7 +167,10 @@ async function resolveOsCislo(
   }
 
   if (!osCislo) {
-    throw new Error("Could not detect your student number from STAG. Check your ticket.");
+    throw new Error(
+      "Could not detect your student number from STAG (API returned no user info). " +
+      "Go to STAG settings, disconnect, and reconnect using Manual Ticket with your student number (osCislo) filled in."
+    );
   }
 
   // Save for future use

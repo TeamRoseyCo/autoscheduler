@@ -64,6 +64,7 @@ export function NewTaskModal({ isOpen, onClose, onCreated, projects }: NewTaskMo
   const [energyType, setEnergyType] = useState("deep");
   const [priority, setPriority] = useState("medium");
   const [deadline, setDeadline] = useState("");
+  const [deadlineTime, setDeadlineTime] = useState("");
   const [startDate, setStartDate] = useState(getTodayStr());
   const [preferredTime, setPreferredTime] = useState("");
   const [projectId, setProjectId] = useState("");
@@ -94,6 +95,7 @@ export function NewTaskModal({ isOpen, onClose, onCreated, projects }: NewTaskMo
       setEnergyType("deep");
       setPriority("medium");
       setDeadline("");
+      setDeadlineTime("");
       setStartDate(getTodayStr());
       setPreferredTime("");
       setProjectId("");
@@ -174,6 +176,7 @@ export function NewTaskModal({ isOpen, onClose, onCreated, projects }: NewTaskMo
       formData.set("energyType", energyType);
       formData.set("priority", priority);
       formData.set("deadline", deadline);
+      formData.set("deadlineTime", deadlineTime);
       formData.set("preferredTimeWindow", preferredTime);
       formData.set("projectId", projectId);
       formData.set("taskStatus", taskStatus);
@@ -377,6 +380,15 @@ export function NewTaskModal({ isOpen, onClose, onCreated, projects }: NewTaskMo
                 onChange={(e) => setDeadline(e.target.value)}
                 className="flex-1 bg-[#12121c] border border-[#2a2a3c] rounded-lg px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-indigo-500/50 [color-scheme:dark]"
               />
+              {deadline && (
+                <input
+                  type="time"
+                  value={deadlineTime}
+                  onChange={(e) => setDeadlineTime(e.target.value)}
+                  placeholder="Time"
+                  className="w-[100px] bg-[#12121c] border border-[#2a2a3c] rounded-lg px-2 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-indigo-500/50 [color-scheme:dark]"
+                />
+              )}
             </div>
 
             <div className="h-px bg-[#2a2a3c]" />

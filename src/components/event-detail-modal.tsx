@@ -67,11 +67,13 @@ export function EventDetailModal({ event, onClose, onSaved, onStartTask, onStopT
   const [transportModalOpen, setTransportModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [toggling, setToggling] = useState(false);
   const [error, setError] = useState("");
   const backdropRef = useRef<HTMLDivElement>(null);
 
   const isGoogle = event?.source === "google";
-  const isReadOnly = isGoogle;
+  const isLocked = event?.locked || false;
+  const isReadOnly = isGoogle || isLocked;
 
   // Populate form when event changes
   useEffect(() => {
@@ -260,6 +262,29 @@ export function EventDetailModal({ event, onClose, onSaved, onStartTask, onStopT
     }
   };
 
+  const handleToggleLock = async () => {
+    if (!event || isGoogle) return;
+    setToggling(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/calendar/blocks/${event.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locked: !event.locked }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to toggle lock");
+      }
+      onSaved();
+      onClose();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setToggling(false);
+    }
+  };
+
   if (!event) return null;
 
   return (
@@ -292,9 +317,20 @@ export function EventDetailModal({ event, onClose, onSaved, onStartTask, onStopT
       >
         {/* Top section */}
         <div className="flex items-center justify-between px-6 pt-5 pb-3">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/15 px-3 py-1 text-xs font-medium text-blue-300 border border-blue-500/20">
-            Event
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/15 px-3 py-1 text-xs font-medium text-blue-300 border border-blue-500/20">
+              Event
+            </span>
+            {isLocked && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-medium text-amber-300 border border-amber-500/20">
+                <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+                  <rect x="3" y="7" width="10" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+                  <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                </svg>
+                Locked
+              </span>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-gray-300 transition-colors p-1 rounded-lg hover:bg-[#2a2a3c]"
@@ -591,6 +627,37 @@ export function EventDetailModal({ event, onClose, onSaved, onStartTask, onStopT
         {/* Bottom bar */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-[#2a2a3c]">
           <div className="flex items-center gap-3">
+            {/* Lock/Unlock toggle — available for all local events */}
+            {event && event.source === "local" && (
+              <button
+                type="button"
+                onClick={handleToggleLock}
+                disabled={toggling}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-colors disabled:opacity-50 ${
+                  isLocked
+                    ? "text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
+                    : "text-gray-400 hover:text-gray-300 hover:bg-[#2a2a3c]"
+                }`}
+              >
+                {isLocked ? (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                      <rect x="3" y="7" width="10" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+                      <path d="M11 7V5a3 3 0 00-5.02-2.22" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                    </svg>
+                    {toggling ? "Unlocking..." : "Unlock"}
+                  </>
+                ) : (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                      <rect x="3" y="7" width="10" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+                      <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                    </svg>
+                    {toggling ? "Locking..." : "Lock"}
+                  </>
+                )}
+              </button>
+            )}
             {!isReadOnly && (
               <button
                 type="button"
@@ -656,24 +723,26 @@ export function EventDetailModal({ event, onClose, onSaved, onStartTask, onStopT
               Cancel
               <kbd className="text-[10px] text-gray-600 bg-[#12121c] border border-[#2a2a3c] rounded px-1.5 py-0.5">Esc</kbd>
             </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={submitting}
-              className="flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
-            >
-              {submitting ? (
-                <>
-                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  {isGoogle ? "Save transport" : "Save"}
-                  <kbd className="text-[10px] text-indigo-300/60 bg-indigo-700/50 border border-indigo-500/30 rounded px-1.5 py-0.5">Ctrl+S</kbd>
-                </>
-              )}
-            </button>
+            {!isLocked && (
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={submitting}
+                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
+              >
+                {submitting ? (
+                  <>
+                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    {isGoogle ? "Save transport" : "Save"}
+                    <kbd className="text-[10px] text-indigo-300/60 bg-indigo-700/50 border border-indigo-500/30 rounded px-1.5 py-0.5">Ctrl+S</kbd>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>

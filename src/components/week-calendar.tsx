@@ -6,6 +6,8 @@ import type { CalendarViewMode } from "@/types";
 import type { ProjectWithCounts } from "@/lib/actions/projects";
 import { LeftSidebar } from "@/components/left-sidebar";
 import { RightPanel } from "@/components/right-panel";
+import { HabitPanel } from "@/components/habit-panel";
+import { SmartImportFAB } from "@/components/smart-import/smart-import-fab";
 import { NewEventModal } from "@/components/new-event-modal";
 import { SearchModal } from "@/components/search-modal";
 import { NewTaskModal } from "@/components/new-task-modal";
@@ -21,6 +23,7 @@ import { ProjectContextMenu } from "@/components/project-context-menu";
 import { EmojiText } from "@/components/emoji-text";
 import { scheduleTodayAction, restoreScheduleAction } from "@/lib/actions/schedule";
 import { rescheduleBlockForLater } from "@/lib/actions/reschedule";
+import type { RescheduleWhen } from "@/components/event-context-menu";
 import { deleteProject } from "@/lib/actions/projects";
 
 const HOUR_HEIGHT = 64;
@@ -61,6 +64,7 @@ export interface CalendarEventData {
   transportAfter?: number;
   transportMode?: string;
   taskMetric?: { id: string; name: string; unit: string; icon: string } | null;
+  locked?: boolean;
 }
 
 // ---- Utilities ----
@@ -175,6 +179,7 @@ function blocksToEvents(blocks: ScheduledBlock[]): CalendarEventData[] {
       transportAfter: block.transportAfter ?? undefined,
       transportMode: block.transportMode || undefined,
       taskMetric: block.task?.metric ?? null,
+      locked: b.locked || false,
     };
   });
 }
@@ -183,30 +188,27 @@ function mergeEvents(
   localEvents: CalendarEventData[],
   googleEvents: CalendarEventData[]
 ): CalendarEventData[] {
-  // Build a lookup of Google events by their ID so we can adopt their data
-  const googleById = new Map<string, CalendarEventData>();
+  // Build a set of Google event IDs that actually exist on Google Calendar
+  const googleEventIdsOnGoogle = new Set<string>();
   for (const ev of googleEvents) {
-    if (ev.googleEventId) googleById.set(ev.googleEventId, ev);
+    if (ev.googleEventId) googleEventIdsOnGoogle.add(ev.googleEventId);
   }
 
+  // Collect local googleEventIds to deduplicate Google events list
   const localGoogleIds = new Set<string>();
+
   const processedLocal = localEvents.map((ev) => {
     if (!ev.googleEventId) return ev;
     localGoogleIds.add(ev.googleEventId);
 
-    // This local block has been synced to Google Calendar — render it as a Google event
-    // so it looks clean (gray, no strikethrough, no task checkbox) and matches the
-    // corresponding Google Calendar entry.
-    const gEvent = googleById.get(ev.googleEventId);
-    return {
-      ...ev,
-      // Prefer the Google event's title in case it was edited there
-      title: gEvent?.title ?? ev.title,
-      color: "gray",
-      source: "google" as const,
-      // Clear task-completion styling
-      status: undefined,
-    };
+    // If the Google event was deleted from GCal, keep the local block as a normal
+    // local event (editable, deletable) — just clear the stale googleEventId visually
+    if (!googleEventIdsOnGoogle.has(ev.googleEventId)) {
+      return { ...ev, source: "local" as const };
+    }
+
+    // Local block synced to Google — keep it local (editable) but mark as completed
+    return { ...ev, source: "local" as const };
   });
 
   // Filter out Google events already represented by a local block
@@ -325,13 +327,19 @@ function computeOverlapLayout(events: CalendarEventData[]): Map<string, LayoutIn
   const result = new Map<string, LayoutInfo>();
   if (events.length === 0) return result;
 
-  // Convert events to intervals with pixel positions for comparison
+  // Minimum visual height in hour-fractions (matches the 20px min in CalendarEvent)
+  const MIN_VISUAL_HOURS = 20 / HOUR_HEIGHT; // ~0.3125h ≈ 18.75min
+
+  // Convert events to intervals using VISUAL bounds (accounting for min height)
   const intervals = events.map((ev) => {
     const start = new Date(ev.startTime);
     const end = new Date(ev.endTime);
     const startH = start.getHours() + start.getMinutes() / 60;
-    const endH = end.getHours() + end.getMinutes() / 60;
-    return { id: ev.id, start: startH, end: endH };
+    const rawEndH = end.getHours() + end.getMinutes() / 60;
+    const endH = rawEndH < startH ? rawEndH + 24 : rawEndH;
+    // Use the visual end: at least minHeight worth of time from start
+    const visualEnd = Math.max(endH, startH + MIN_VISUAL_HOURS);
+    return { id: ev.id, start: startH, end: visualEnd };
   });
 
   // Sort by start time, then by longer duration first
@@ -534,6 +542,7 @@ function CalendarEvent({
     if (e.button !== 0) return;
     if ((e.target as HTMLElement).dataset.resizeHandle) return;
     if ((e.target as HTMLElement).dataset.checkboxHandle) return;
+    if (event.locked) return; // Block drag for locked events
     e.preventDefault();
     e.stopPropagation();
     onDragStart(event, e.clientY, naturalTop, naturalHeight, e.clientX);
@@ -541,6 +550,7 @@ function CalendarEvent({
 
   const handleResizeMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
+    if (event.locked) return; // Block resize for locked events
     e.preventDefault();
     e.stopPropagation();
     onResizeStart(event, e.clientY, naturalHeight);
@@ -548,6 +558,7 @@ function CalendarEvent({
 
   const handleRightClick = (e: React.MouseEvent) => {
     if (event.source !== "local" || event.googleEventId) return;
+    if (event.locked) return; // Block context menu for locked events
     e.preventDefault();
     e.stopPropagation();
     onContextMenu(event, e.clientX, e.clientY);
@@ -556,6 +567,7 @@ function CalendarEvent({
   const handleCheckboxClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (event.locked) return; // Block completion toggle for locked events
     onToggleComplete(event);
   };
 
@@ -566,7 +578,7 @@ function CalendarEvent({
   return (
     <div
       ref={elRef}
-      className={`absolute rounded-md border-l-[3px] ${colors.border} ${colors.bg} px-2 py-1 overflow-hidden cursor-grab hover:brightness-125 hover:shadow-lg transition-shadow group select-none ${
+      className={`absolute rounded-md border-l-[3px] ${colors.border} ${colors.bg} px-2 py-1 overflow-hidden ${event.locked ? "cursor-default" : "cursor-grab"} hover:brightness-125 hover:shadow-lg transition-shadow group select-none ${
         isDragging ? "opacity-70 shadow-2xl z-30 cursor-grabbing" : ""
       } ${isResizing ? "z-30" : ""} ${isCompleted ? "opacity-50" : ""} ${isInProgress ? "ring-1 ring-red-500/50" : ""}`}
       style={posStyle}
@@ -627,6 +639,14 @@ function CalendarEvent({
             {event.availability === "free" ? "F" : event.availability === "free_light" ? "L" : "T"}
           </span>
         )}
+        {event.locked && (
+          <span className="flex-shrink-0 mt-0.5 opacity-50" title="Locked">
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+              <rect x="3" y="7" width="10" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+              <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+          </span>
+        )}
         {event.source === "google" && (
           <svg width="10" height="10" viewBox="0 0 16 16" fill="none" className="flex-shrink-0 mt-0.5 opacity-40">
             <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
@@ -634,12 +654,14 @@ function CalendarEvent({
           </svg>
         )}
       </div>
-      {/* Resize handle */}
-      <div
-        data-resize-handle="true"
-        className="absolute bottom-0 left-0 right-0 h-[6px] cursor-ns-resize hover:bg-white/10 transition-colors"
-        onMouseDown={handleResizeMouseDown}
-      />
+      {/* Resize handle — hidden for locked events */}
+      {!event.locked && (
+        <div
+          data-resize-handle="true"
+          className="absolute bottom-0 left-0 right-0 h-[6px] cursor-ns-resize hover:bg-white/10 transition-colors"
+          onMouseDown={handleResizeMouseDown}
+        />
+      )}
     </div>
   );
 }
@@ -807,6 +829,14 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
     blocksToEvents(initialBlocks)
   );
   const [googleEvents, setGoogleEvents] = useState<CalendarEventData[]>([]);
+  const [deadlines, setDeadlines] = useState<Array<{
+    id: string;
+    title: string;
+    date: string;
+    time: string | null;
+    priority: string;
+    projectName: string | null;
+  }>>([]);
   const [currentDate, setCurrentDate] = useState(() => new Date(initialDate + "T12:00:00"));
   const [view, setView] = useState<CalendarViewMode>("week");
   const [loading, setLoading] = useState(false);
@@ -827,6 +857,7 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
     return true;
   });
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  const [habitPanelOpen, setHabitPanelOpen] = useState(false);
   const [showGoogleEvents, setShowGoogleEvents] = useState(true);
   const [showLocalEvents, setShowLocalEvents] = useState(true);
   const [newEventModalOpen, setNewEventModalOpen] = useState(false);
@@ -913,15 +944,28 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
     }
   }, []);
 
+  // Fetch task deadlines for visible date range
+  const fetchDeadlines = useCallback(async (startDate: string, endDate: string) => {
+    try {
+      const res = await fetch(`/api/calendar/deadlines?startDate=${startDate}&endDate=${endDate}`);
+      if (res.ok) {
+        const data = await res.json();
+        setDeadlines(data);
+      }
+    } catch {
+      // Silently fail
+    }
+  }, []);
+
   // Fetch all events for a given base date + view
   const fetchAllEvents = useCallback(
     async (baseDate: Date, v: CalendarViewMode) => {
       setLoading(true);
       const { startDate, endDate } = getFetchRange(baseDate, v);
-      await Promise.all([fetchLocalBlocks(startDate, endDate), fetchGoogleEvents(startDate, endDate)]);
+      await Promise.all([fetchLocalBlocks(startDate, endDate), fetchGoogleEvents(startDate, endDate), fetchDeadlines(startDate, endDate)]);
       setLoading(false);
     },
-    [fetchLocalBlocks, fetchGoogleEvents]
+    [fetchLocalBlocks, fetchGoogleEvents, fetchDeadlines]
   );
 
   // Fetch projects
@@ -937,10 +981,11 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
     }
   }, []);
 
-  // Initial fetch for Google events + reschedule overdue
+  // Initial fetch for Google events + deadlines + reschedule overdue
   useEffect(() => {
     const { startDate, endDate } = getFetchRange(currentDate, view);
     fetchGoogleEvents(startDate, endDate);
+    fetchDeadlines(startDate, endDate);
 
     // Reschedule overdue tasks on initial load
     fetch("/api/calendar/reschedule", { method: "POST" })
@@ -1223,13 +1268,13 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
     }
   }, [completionEvent, fetchAllEvents, fetchProjects, currentDate, view]);
 
-  const handleRescheduleForLater = useCallback(async () => {
+  const handleRescheduleForLater = useCallback(async (when: RescheduleWhen) => {
     if (!contextMenu) return;
     const event = contextMenu.event;
     setContextMenu(null);
 
     try {
-      const result = await rescheduleBlockForLater(event.id);
+      const result = await rescheduleBlockForLater(event.id, when);
       if (result.success) {
         setToastMessage(`Rescheduled to ${result.date}`);
       } else {
@@ -1295,18 +1340,51 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
     []
   );
 
+  // Stable refs for drag/resize handlers to avoid listener churn
+  const dragStateRef = useRef(dragState);
+  dragStateRef.current = dragState;
+  const resizeStateRef = useRef(resizeState);
+  resizeStateRef.current = resizeState;
+  const gridDragRef = useRef(gridDrag);
+  gridDragRef.current = gridDrag;
+  const allEventsRef = useRef(allEvents);
+  allEventsRef.current = allEvents;
+  const fetchAllEventsRef = useRef(fetchAllEvents);
+  fetchAllEventsRef.current = fetchAllEvents;
+  const currentDateRef = useRef(currentDate);
+  currentDateRef.current = currentDate;
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const visibleDatesRef = useRef(visibleDates);
+  visibleDatesRef.current = visibleDates;
+
+  const isInteracting = !!(dragState || resizeState || gridDrag);
+
   // Global mousemove/mouseup for drag and resize
   useEffect(() => {
-    if (!dragState && !resizeState && !gridDrag) return;
+    if (!isInteracting) return;
+
+    const cancelAll = () => {
+      setDragState(null);
+      setResizeState(null);
+      setGridDrag(null);
+    };
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (dragState) {
-        const deltaY = e.clientY - dragState.startMouseY;
-        const newTop = snapToGrid(dragState.originalTop + deltaY);
-        const clampedTop = Math.max(0, Math.min(newTop, TOTAL_HOURS * HOUR_HEIGHT - dragState.originalHeight));
+      // Safety: if mouse button was released but we missed it, cancel drag
+      if (e.buttons === 0) {
+        cancelAll();
+        return;
+      }
+
+      const ds = dragStateRef.current;
+      if (ds) {
+        const deltaY = e.clientY - ds.startMouseY;
+        const newTop = snapToGrid(ds.originalTop + deltaY);
+        const clampedTop = Math.max(0, Math.min(newTop, TOTAL_HOURS * HOUR_HEIGHT - ds.originalHeight));
 
         // Determine which day column the mouse is over for cross-day dragging
-        let newDate = dragState.currentDate;
+        let newDate = ds.currentDate;
         if (columnsRef.current) {
           const columns = columnsRef.current.children;
           // First child is the time gutter (w-[60px]), rest are day columns
@@ -1315,8 +1393,8 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
             const rect = col.getBoundingClientRect();
             if (e.clientX >= rect.left && e.clientX < rect.right) {
               const dateIdx = i - 1; // offset by 1 for the time gutter
-              if (dateIdx >= 0 && dateIdx < visibleDates.length) {
-                newDate = dateToKey(visibleDates[dateIdx]);
+              if (dateIdx >= 0 && dateIdx < visibleDatesRef.current.length) {
+                newDate = dateToKey(visibleDatesRef.current[dateIdx]);
               }
               break;
             }
@@ -1325,40 +1403,43 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
 
         setDragState((prev) => prev ? { ...prev, currentTop: clampedTop, currentDate: newDate } : null);
       }
-      if (resizeState) {
-        const deltaY = e.clientY - resizeState.startMouseY;
-        const newHeight = snapToGrid(Math.max(SNAP_PX, resizeState.originalHeight + deltaY));
+      const rs = resizeStateRef.current;
+      if (rs) {
+        const deltaY = e.clientY - rs.startMouseY;
+        const newHeight = snapToGrid(Math.max(SNAP_PX, rs.originalHeight + deltaY));
         setResizeState((prev) => prev ? { ...prev, currentHeight: newHeight } : null);
       }
-      if (gridDrag) {
-        const rect = gridDrag.columnEl.getBoundingClientRect();
-        const relativeY = e.clientY - rect.top + gridDrag.columnEl.parentElement!.scrollTop;
+      const gd = gridDragRef.current;
+      if (gd) {
+        const rect = gd.columnEl.getBoundingClientRect();
+        const relativeY = e.clientY - rect.top + gd.columnEl.parentElement!.scrollTop;
         setGridDrag((prev) => prev ? { ...prev, currentY: relativeY } : null);
       }
     };
 
     const handleMouseUp = async () => {
-      if (dragState) {
-        const movedPx = Math.abs(dragState.currentTop - dragState.originalTop);
-        const dateChanged = dragState.currentDate !== dragState.originalDate;
+      const ds = dragStateRef.current;
+      if (ds) {
+        const movedPx = Math.abs(ds.currentTop - ds.originalTop);
+        const dateChanged = ds.currentDate !== ds.originalDate;
         if (movedPx > 2 || dateChanged) {
           dragPreventClick.current = true;
-          const time = pxToTime(dragState.currentTop);
-          const startDate = new Date(`${dragState.currentDate}T${formatHHMM(time.hours, time.minutes)}:00`);
-          const durationMs = (dragState.originalHeight / HOUR_HEIGHT) * 3600000;
+          const time = pxToTime(ds.currentTop);
+          const startDate = new Date(`${ds.currentDate}T${formatHHMM(time.hours, time.minutes)}:00`);
+          const durationMs = (ds.originalHeight / HOUR_HEIGHT) * 3600000;
           const endDate = new Date(startDate.getTime() + durationMs);
 
           try {
-            await fetch(`/api/calendar/blocks/${dragState.eventId}`, {
+            await fetch(`/api/calendar/blocks/${ds.eventId}`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 startTime: startDate.toISOString(),
                 endTime: endDate.toISOString(),
-                date: dragState.currentDate,
+                date: ds.currentDate,
               }),
             });
-            await fetchAllEvents(currentDate, view);
+            await fetchAllEventsRef.current(currentDateRef.current, viewRef.current);
           } catch {
             setToastMessage("Failed to move event");
           }
@@ -1366,26 +1447,27 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
         setDragState(null);
       }
 
-      if (resizeState) {
-        const deltaHeight = Math.abs(resizeState.currentHeight - resizeState.originalHeight);
+      const rs = resizeStateRef.current;
+      if (rs) {
+        const deltaHeight = Math.abs(rs.currentHeight - rs.originalHeight);
         if (deltaHeight > 2) {
           dragPreventClick.current = true;
           // Find the event to compute its new endTime
-          const event = allEvents.find((e) => e.id === resizeState.eventId);
+          const event = allEventsRef.current.find((e) => e.id === rs.eventId);
           if (event) {
             const startMs = new Date(event.startTime).getTime();
-            const newDurationMs = (resizeState.currentHeight / HOUR_HEIGHT) * 3600000;
+            const newDurationMs = (rs.currentHeight / HOUR_HEIGHT) * 3600000;
             const newEnd = new Date(startMs + newDurationMs);
 
             try {
-              await fetch(`/api/calendar/blocks/${resizeState.eventId}`, {
+              await fetch(`/api/calendar/blocks/${rs.eventId}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   endTime: newEnd.toISOString(),
                 }),
               });
-              await fetchAllEvents(currentDate, view);
+              await fetchAllEventsRef.current(currentDateRef.current, viewRef.current);
             } catch {
               setToastMessage("Failed to resize event");
             }
@@ -1394,16 +1476,17 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
         setResizeState(null);
       }
 
-      if (gridDrag) {
-        const topY = Math.min(gridDrag.startY, gridDrag.currentY);
-        const bottomY = Math.max(gridDrag.startY, gridDrag.currentY);
+      const gd = gridDragRef.current;
+      if (gd) {
+        const topY = Math.min(gd.startY, gd.currentY);
+        const bottomY = Math.max(gd.startY, gd.currentY);
         const heightPx = bottomY - topY;
 
         if (heightPx >= SNAP_PX) {
           const startTime = pxToTime(snapToGrid(topY));
           const endTime = pxToTime(snapToGrid(bottomY));
 
-          setGridCreateDate(gridDrag.dateKey);
+          setGridCreateDate(gd.dateKey);
           setGridCreateStart(formatHHMM(startTime.hours, startTime.minutes));
           setGridCreateEnd(formatHHMM(endTime.hours, endTime.minutes));
           setNewEventModalOpen(true);
@@ -1414,11 +1497,15 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
 
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
+    // Cancel drag if window loses focus (alt-tab, etc.)
+    window.addEventListener("blur", cancelAll);
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("blur", cancelAll);
     };
-  }, [dragState, resizeState, gridDrag, allEvents, fetchAllEvents, currentDate, view, visibleDates]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInteracting]);
 
   // Grid click-to-create: mousedown on day column background
   const handleColumnMouseDown = useCallback(
@@ -1492,6 +1579,7 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
         collapsed={!sidebarOpen}
         onToggle={() => setSidebarOpen((v) => !v)}
         onSearchClick={() => setSearchModalOpen(true)}
+        onHabitsClick={() => setHabitPanelOpen((v) => !v)}
         projects={projects}
         onAddProjectClick={() => { setEditProjectData(null); setProjectFormModalOpen(true); }}
         onAIProjectClick={() => setAIProjectModalOpen(true)}
@@ -1546,6 +1634,21 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
             >
               <RefreshIcon />
               <span className="hidden sm:inline">Refresh</span>
+            </button>
+            <button
+              onClick={() => setHabitPanelOpen((v) => !v)}
+              className={`rounded-lg px-3 py-1.5 text-sm transition-colors flex items-center gap-1.5 ${
+                habitPanelOpen
+                  ? "text-indigo-300 bg-indigo-600/20"
+                  : "text-gray-400 hover:text-gray-200 hover:bg-[#2a2a3c]"
+              }`}
+              title="Habits"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M2 8a6 6 0 0111.5-2.3M14 8a6 6 0 01-11.5 2.3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M14 2v4h-4M2 14v-4h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className="hidden sm:inline">Habits</span>
             </button>
             <NewDropdown
               onNewEvent={() => setNewEventModalOpen(true)}
@@ -1801,6 +1904,42 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
                         });
                       })()}
 
+                      {/* Deadline lines */}
+                      {deadlines
+                        .filter((d) => d.date === key)
+                        .map((d) => {
+                          // If deadline has a time, position at that time; otherwise position at end of work day (23:59)
+                          const timeStr = d.time || "23:59";
+                          const [hh, mm] = timeStr.split(":").map(Number);
+                          const hours = hh + mm / 60;
+                          if (hours < START_HOUR || hours >= END_HOUR) return null;
+                          const top = (hours - START_HOUR) * HOUR_HEIGHT;
+
+                          // Strip leading emoji from title for cleaner label
+                          const label = d.title.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}]\uFE0F?\s*/u, "");
+
+                          return (
+                            <div
+                              key={`deadline-${d.id}`}
+                              className="absolute left-0 right-0 z-[15] pointer-events-none"
+                              style={{ top: `${top}px` }}
+                            >
+                              <div className="relative flex items-center">
+                                {/* Diamond marker */}
+                                <div className="absolute -left-[3px] w-[7px] h-[7px] rotate-45 bg-red-500 border border-red-400 shadow-[0_0_6px_rgba(239,68,68,0.5)]" />
+                                {/* Dashed line */}
+                                <div className="w-full h-[2px] border-t-2 border-dashed border-red-500/70" />
+                              </div>
+                              {/* Label */}
+                              <div className="absolute right-1 -top-[14px] flex items-center gap-1">
+                                <span className="text-[10px] font-medium text-red-400 bg-[#16161f]/90 px-1.5 py-0 rounded truncate max-w-[120px]" title={d.title}>
+                                  {d.time ? `${d.time} ` : ""}{label}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+
                       {isToday && <CurrentTimeIndicator />}
                     </div>
                   );
@@ -1931,6 +2070,16 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
           onClose={() => setProjectContextMenu(null)}
         />
       )}
+
+      {/* Habit Panel (Modal) */}
+      <HabitPanel
+        isOpen={habitPanelOpen}
+        onClose={() => setHabitPanelOpen(false)}
+        onGenerated={() => fetchAllEvents(currentDate, view)}
+      />
+
+      {/* Smart Import FAB */}
+      <SmartImportFAB onImported={() => fetchAllEvents(currentDate, view)} />
 
       {/* Toast */}
       {toastMessage && (

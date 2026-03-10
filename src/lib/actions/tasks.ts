@@ -4,13 +4,14 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod/v4";
-import { autoScheduleTask } from "@/lib/local-scheduler";
+import { autoScheduleTask, rescheduleAllTasks } from "@/lib/local-scheduler";
 import { createCalendarEvent, deleteCalendarEvent } from "@/lib/google-calendar";
 
 const taskSchema = z.object({
   title: z.string().min(1, "Title is required").max(200),
   durationMinutes: z.coerce.number().int().min(5).max(480),
   deadline: z.string().optional().default(""),
+  deadlineTime: z.string().optional().default(""),
   priority: z.enum(["asap", "high", "medium", "low"]),
   energyType: z.enum(["deep", "light", "admin"]),
   preferredTimeWindow: z.string().optional().default(""),
@@ -61,6 +62,7 @@ export async function createTask(formData: FormData) {
       title: data.title,
       durationMinutes: data.durationMinutes,
       deadline: data.deadline ? new Date(data.deadline) : null,
+      deadlineTime: data.deadlineTime || null,
       priority: data.priority,
       energyType: data.energyType,
       preferredTimeWindow: data.preferredTimeWindow || null,
@@ -71,9 +73,9 @@ export async function createTask(formData: FormData) {
     },
   });
 
-  // Auto-schedule the task on the calendar (local only, no Google event)
+  // Reschedule all pending tasks so higher-priority / sooner-deadline tasks get best slots
   try {
-    await autoScheduleTask(session.user.id, task.id);
+    await rescheduleAllTasks(session.user.id);
   } catch (err) {
     console.error("Auto-schedule failed (non-blocking):", err);
   }
@@ -97,6 +99,7 @@ export async function updateTask(taskId: string, formData: FormData) {
       title: data.title,
       durationMinutes: data.durationMinutes,
       deadline: data.deadline ? new Date(data.deadline) : null,
+      deadlineTime: data.deadlineTime || null,
       priority: data.priority,
       energyType: data.energyType,
       preferredTimeWindow: data.preferredTimeWindow || null,
@@ -172,6 +175,16 @@ export async function setTaskStatus(
       console.error("Google Calendar sync on completion failed (non-blocking):", err);
     }
   }
+
+  revalidatePath("/tasks");
+  revalidatePath("/");
+}
+
+export async function rescheduleAll() {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Not authenticated");
+
+  await rescheduleAllTasks(session.user.id);
 
   revalidatePath("/tasks");
   revalidatePath("/");

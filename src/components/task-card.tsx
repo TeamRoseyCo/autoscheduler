@@ -167,7 +167,12 @@ export function TaskCard({ task }: { task: TaskWithProject }) {
           </div>
           <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
             <span>{formatDuration(task.durationMinutes)}</span>
-            {task.deadline && <span>Due {new Date(task.deadline).toLocaleDateString()}</span>}
+            {task.deadline && (
+              <span className="text-red-400">
+                Due {new Date(task.deadline).toLocaleDateString()}
+                {task.deadlineTime ? ` at ${task.deadlineTime}` : ""}
+              </span>
+            )}
             {task.preferredTimeWindow && <span>{task.preferredTimeWindow}</span>}
           </div>
         </div>

@@ -68,27 +68,9 @@ export function StagPanel({ settings }: StagPanelProps) {
     const callbackUrl = `${window.location.origin}/stag-callback`;
     const loginUrl = `${cleanUrl}/ws/login?originalURL=${encodeURIComponent(callbackUrl)}&longTicket=1`;
 
-    const popup = window.open(loginUrl, "stag_sso", "width=620,height=700,left=200,top=100");
-
-    if (!popup) {
-      setError("Popup was blocked. Please allow popups for this site and try again.");
-      return;
-    }
-
+    // Open in new tab (popups often get blocked)
+    window.open(loginUrl, "_blank");
     setSsoWaiting(true);
-
-    // Poll for popup close
-    const pollTimer = setInterval(() => {
-      if (popup.closed) {
-        clearInterval(pollTimer);
-        setTimeout(() => {
-          setSsoWaiting((w) => {
-            if (w) return false;
-            return w;
-          });
-        }, 500);
-      }
-    }, 500);
   };
 
   const handleTestConnection = async () => {
@@ -117,17 +99,21 @@ export function StagPanel({ settings }: StagPanelProps) {
       const cleanUrl = stagUrl.trim().replace(/\/+$/, "");
       // Auto-fix portal URL to API URL
       const apiUrl = cleanUrl.replace(/\/\/stag\.(?!services|ws)/, "//stagservices.");
-      // Save directly — student number will be auto-detected on first sync
+      const trimmedOsCislo = manualOsCislo.trim();
       const res = await fetch("/api/uni/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           stagUrl: apiUrl,
           stagTicket: manualTicket.trim(),
+          ...(trimmedOsCislo ? { stagOsCislo: trimmedOsCislo, stagUser: trimmedOsCislo } : {}),
         }),
       });
       if (!res.ok) throw new Error("Failed to save");
-      setMessage("Connected to STAG! Your student info will be detected on first sync.");
+      setMessage(trimmedOsCislo
+        ? `Connected to STAG as ${trimmedOsCislo}!`
+        : "Connected to STAG! Your student info will be detected on first sync."
+      );
       setTimeout(() => setMessage(""), 5000);
       router.refresh();
     } catch (e: any) {
@@ -274,17 +260,50 @@ export function StagPanel({ settings }: StagPanelProps) {
             )
           ) : (
             <>
+              {/* Get ticket helper */}
+              <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20 mb-1">
+                <p className="text-xs text-blue-300 font-medium mb-1.5">Easiest way to get your ticket:</p>
+                <p className="text-[11px] text-gray-400 mb-2">
+                  Click the button below — it opens STAG login. After you sign in, the ticket will be shown for you to copy.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cleanUrl = stagUrl.trim().replace(/\/+$/, "");
+                    localStorage.setItem("stag_sso_url", cleanUrl);
+                    const callbackUrl = `${window.location.origin}/stag-callback`;
+                    const loginUrl = `${cleanUrl}/ws/login?originalURL=${encodeURIComponent(callbackUrl)}&longTicket=1`;
+                    window.open(loginUrl, "_blank");
+                  }}
+                  className="w-full px-3 py-1.5 text-xs bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded border border-blue-500/30"
+                >
+                  Open STAG Login → Get Ticket
+                </button>
+                <p className="text-[10px] text-gray-600 mt-1.5">
+                  After login, copy the ticket from the page and paste it below. Your student number (osobní číslo) is in STAG → Moje studium, or on your student/ISIC card.
+                </p>
+              </div>
+
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Ticket</label>
                 <input
                   type="password"
                   value={manualTicket}
                   onChange={(e) => setManualTicket(e.target.value)}
-                  placeholder="Your STAG login ticket"
+                  placeholder="Paste ticket from above"
+                  className="w-full px-3 py-2 rounded-lg bg-[#1e1e30] border border-[#2a2a3c] text-white text-sm focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Student Number (osobní číslo)</label>
+                <input
+                  value={manualOsCislo}
+                  onChange={(e) => setManualOsCislo(e.target.value)}
+                  placeholder="e.g. R21234"
                   className="w-full px-3 py-2 rounded-lg bg-[#1e1e30] border border-[#2a2a3c] text-white text-sm focus:outline-none focus:border-blue-500"
                 />
                 <p className="text-[10px] text-gray-600 mt-1">
-                  Paste the stagUserTicket from your STAG session. Your student number will be fetched automatically.
+                  Found on your ISIC/student card or in STAG → Moje studium.
                 </p>
               </div>
               <button
@@ -323,6 +342,18 @@ export function StagPanel({ settings }: StagPanelProps) {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => {
+              const cleanUrl = (settings.stagUrl || stagUrl).replace(/\/+$/, "");
+              localStorage.setItem("stag_sso_url", cleanUrl);
+              const callbackUrl = `${window.location.origin}/stag-callback`;
+              const loginUrl = `${cleanUrl}/ws/login?originalURL=${encodeURIComponent(callbackUrl)}&longTicket=1`;
+              window.open(loginUrl, "_blank");
+            }}
+            className="px-3 py-1 text-xs text-amber-400 hover:bg-amber-500/10 rounded border border-amber-500/30"
+          >
+            Re-login
+          </button>
+          <button
             onClick={handleTestConnection}
             disabled={testing}
             className="px-3 py-1 text-xs text-blue-400 hover:bg-blue-500/10 rounded border border-blue-500/30 disabled:opacity-50"
@@ -337,6 +368,48 @@ export function StagPanel({ settings }: StagPanelProps) {
           </button>
         </div>
       </div>
+
+      {/* Missing student number — prompt to enter it */}
+      {!settings.stagOsCislo && (
+        <div className="p-4 rounded-lg bg-amber-500/5 border border-amber-500/20 mb-4">
+          <p className="text-sm text-amber-300 font-medium mb-1">Student number missing</p>
+          <p className="text-xs text-gray-400 mb-3">
+            STAG couldn&apos;t detect your student number automatically. Enter it below to enable syncing.
+            You can find it in STAG under <span className="text-gray-300">Moje studium</span> {"\u2192"} <span className="text-gray-300">Osobní údaje</span> (look for &quot;osobní číslo&quot;), or on your student/ISIC card (the short code like <span className="text-gray-300 font-mono">R21234</span>, not the long chip number).
+          </p>
+          <div className="flex gap-2">
+            <input
+              value={manualOsCislo}
+              onChange={(e) => setManualOsCislo(e.target.value)}
+              placeholder="e.g. R21234"
+              className="flex-1 px-3 py-2 rounded-lg bg-[#1e1e30] border border-[#2a2a3c] text-white text-sm focus:outline-none focus:border-blue-500"
+            />
+            <button
+              onClick={async () => {
+                const val = manualOsCislo.trim();
+                if (!val) { setError("Enter your student number"); return; }
+                setError("");
+                try {
+                  const res = await fetch("/api/uni/settings", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ stagOsCislo: val, stagUser: val }),
+                  });
+                  if (!res.ok) throw new Error("Failed to save");
+                  setMessage(`Student number set to ${val}`);
+                  setTimeout(() => setMessage(""), 5000);
+                  router.refresh();
+                } catch (e: any) {
+                  setError(e.message || "Failed to save");
+                }
+              }}
+              className="px-4 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded-lg"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Sync cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">

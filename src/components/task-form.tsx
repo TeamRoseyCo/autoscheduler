@@ -160,16 +160,24 @@ export function TaskForm({
           <label className="block text-sm font-medium text-gray-300">
             Deadline
           </label>
-          <input
-            type="date"
-            name="deadline"
-            defaultValue={
-              task?.deadline
-                ? new Date(task.deadline).toISOString().split("T")[0]
-                : ""
-            }
-            className="mt-1 block w-full rounded-md bg-[#12121c] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 shadow-sm focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 [color-scheme:dark]"
-          />
+          <div className="mt-1 flex gap-2">
+            <input
+              type="date"
+              name="deadline"
+              defaultValue={
+                task?.deadline
+                  ? new Date(task.deadline).toISOString().split("T")[0]
+                  : ""
+              }
+              className="block w-full rounded-md bg-[#12121c] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 shadow-sm focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 [color-scheme:dark]"
+            />
+            <input
+              type="time"
+              name="deadlineTime"
+              defaultValue={task?.deadlineTime || ""}
+              className="block w-[100px] rounded-md bg-[#12121c] border border-[#2a2a3c] px-2 py-2 text-sm text-gray-200 shadow-sm focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 [color-scheme:dark]"
+            />
+          </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-300">

@@ -74,6 +74,29 @@ export async function deleteCourse(id: string) {
   return course;
 }
 
+export async function mergeCourses(sourceId: string, targetId: string) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Not authenticated");
+
+  // Verify both courses belong to the user
+  const [source, target] = await Promise.all([
+    prisma.uniCourse.findFirst({ where: { id: sourceId, userId: session.user.id } }),
+    prisma.uniCourse.findFirst({ where: { id: targetId, userId: session.user.id } }),
+  ]);
+  if (!source || !target) throw new Error("Course not found");
+
+  // Move all related data from source to target
+  await prisma.$transaction([
+    prisma.uniClassSlot.updateMany({ where: { courseId: sourceId }, data: { courseId: targetId } }),
+    prisma.uniExam.updateMany({ where: { courseId: sourceId }, data: { courseId: targetId } }),
+    prisma.uniGradeItem.updateMany({ where: { courseId: sourceId }, data: { courseId: targetId } }),
+    prisma.uniNote.updateMany({ where: { courseId: sourceId }, data: { courseId: targetId } }),
+    prisma.uniClassSummary.updateMany({ where: { courseId: sourceId }, data: { courseId: targetId } }),
+    prisma.uniResource.updateMany({ where: { courseId: sourceId }, data: { courseId: targetId } }),
+    prisma.uniCourse.delete({ where: { id: sourceId } }),
+  ]);
+}
+
 export async function getCourseDetail(id: string) {
   const session = await auth();
   if (!session?.user?.id) return null;

@@ -22,6 +22,9 @@ export async function getProjects() {
       tasks: {
         select: { id: true, completed: true },
       },
+      habits: {
+        select: { id: true },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -37,6 +40,7 @@ export async function getProjects() {
     updatedAt: p.updatedAt,
     taskCount: p.tasks.length,
     completedCount: p.tasks.filter((t) => t.completed).length,
+    habitCount: p.habits.length,
   }));
 }
 

@@ -121,7 +121,15 @@ async function createWindow() {
     if (url.includes("accounts.google.com")) {
       event.preventDefault();
       shell.openExternal(url);
+      // Re-focus webContents after preventDefault to avoid losing keyboard input
+      setTimeout(() => mainWindow?.webContents.focus(), 100);
     }
+  });
+
+  // Fix: re-focus webContents whenever the window regains focus
+  // Prevents the known Electron bug where keyboard input silently stops
+  mainWindow.on("focus", () => {
+    mainWindow.webContents.focus();
   });
 
   mainWindow.on("closed", () => {

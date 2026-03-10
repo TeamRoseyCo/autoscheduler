@@ -108,16 +108,18 @@ if "%choice%"=="1" (
     echo   Launching AutoScheduler desktop app...
     if exist "dist-electron\win-unpacked\AutoScheduler.exe" (
         start "" "dist-electron\win-unpacked\AutoScheduler.exe"
+        exit
     ) else (
         echo   Desktop build not found. Starting with Electron dev mode...
         call npm run electron
     )
 ) else (
     echo.
-    echo   Starting server...
+    echo   Starting server in background...
     echo   Browser will open automatically.
     echo.
-    start /b cmd /c "timeout /t 4 /nobreak >nul && start http://localhost:3000"
-    call npm run dev
+    start /min "AutoScheduler Server" cmd /k "npm run dev"
+    timeout /t 4 /nobreak >nul
+    start http://localhost:3000
+    exit
 )
-pause

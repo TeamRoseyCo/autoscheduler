@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { ClassSlotModal } from "./class-slot-modal";
+import { GCalDetectModal } from "./gcal-detect-modal";
 import { useRouter } from "next/navigation";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -40,6 +41,7 @@ export function TimetableGrid({ slots, courses }: TimetableGridProps) {
   const [editSlot, setEditSlot] = useState<any>(null);
   const [prefillDay, setPrefillDay] = useState<number | undefined>();
   const [prefillTime, setPrefillTime] = useState<string | undefined>();
+  const [showDetect, setShowDetect] = useState(false);
 
   // Detect conflicts
   const conflicts = useMemo(() => {
@@ -96,12 +98,24 @@ export function TimetableGrid({ slots, courses }: TimetableGridProps) {
           <h1 className="text-2xl font-bold text-white">Schedule</h1>
           <p className="text-sm text-gray-400 mt-1">{totalSlots} classes, {totalClassHours.toFixed(1)} hours/week</p>
         </div>
-        <button
-          onClick={() => { setEditSlot(null); setPrefillDay(undefined); setPrefillTime(undefined); setShowModal(true); }}
-          className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-        >
-          + Add Class
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowDetect(true)}
+            className="px-4 py-2 text-sm border border-[#2a2a3c] text-gray-400 hover:text-gray-200 hover:bg-[#2a2a3c] rounded-lg transition-colors inline-flex items-center gap-1.5"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M11 11l3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            Detect from Calendar
+          </button>
+          <button
+            onClick={() => { setEditSlot(null); setPrefillDay(undefined); setPrefillTime(undefined); setShowModal(true); }}
+            className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+          >
+            + Add Class
+          </button>
+        </div>
       </div>
 
       {conflicts.size > 0 && (
@@ -195,6 +209,11 @@ export function TimetableGrid({ slots, courses }: TimetableGridProps) {
         slot={editSlot}
         prefillDay={prefillDay}
         prefillTime={prefillTime}
+      />
+
+      <GCalDetectModal
+        isOpen={showDetect}
+        onClose={() => setShowDetect(false)}
       />
     </div>
   );

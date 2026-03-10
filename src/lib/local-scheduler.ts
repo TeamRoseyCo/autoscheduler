@@ -60,15 +60,19 @@ async function getFreeSlotsForDay(
 }
 
 /**
- * Find the next free slot that fits `durationMinutes` starting from today.
- * NEW: If no single slot fits the full duration, return the largest available
+ * Find the next free slot that fits `durationMinutes`.
+ * Optionally starts searching from a specific date (e.g. a task's deadline day)
+ * instead of today, so tasks get placed on/near their target day.
+ * If no single slot fits the full duration, returns the largest available
  * slot (at least MIN_CHUNK_MINUTES) so callers can schedule a partial chunk.
  */
 export async function findNextFreeSlot(
   userId: string,
   durationMinutes: number,
   preferredTimeWindow?: string | null,
-  energyType?: string | null
+  energyType?: string | null,
+  startFrom?: Date | null,
+  maxDays?: number
 ): Promise<{ date: string; startTime: Date; endTime: Date; isPartial?: boolean } | null> {
   const preferences = await prisma.preferences.findUnique({
     where: { userId },
@@ -77,25 +81,30 @@ export async function findNextFreeSlot(
   if (!preferences) return null;
 
   const now = new Date();
+  // Use startFrom if provided and it's in the future, otherwise use now
+  const searchStart = startFrom && startFrom.getTime() > now.getTime()
+    ? startFrom
+    : now;
 
   // Pass 1: look for a slot that fits the full duration (existing behavior)
   // Pass 2: if nothing fits, find the biggest gap we can fill a chunk into
+  const searchDays = maxDays ?? 7;
+
   for (const allowPartial of [false, true]) {
-    for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
-      const targetDate = new Date(now);
+    for (let dayOffset = 0; dayOffset < searchDays; dayOffset++) {
+      const targetDate = new Date(searchStart);
       targetDate.setDate(targetDate.getDate() + dayOffset);
       const dateKey = dateToKey(targetDate);
+      const isToday = dateToKey(targetDate) === dateToKey(now);
 
       let freeSlots = await getFreeSlotsForDay(userId, dateKey, preferences);
 
-      // For today, also look at evening slots (after work hours) so we don't miss
-      // free time the user has at night. This is important when it's past work hours.
-      if (dayOffset === 0) {
+      // For today, also look at evening slots (after work hours)
+      if (isToday) {
         const workEnd = preferences.workEndTime || "17:00";
         const nowHH = String(now.getHours()).padStart(2, "0");
         const nowMM = String(now.getMinutes()).padStart(2, "0");
         const nowHHMM = `${nowHH}:${nowMM}`;
-        // Start evening search from the later of (workEnd, now)
         const eveningStart = nowHHMM > workEnd ? nowHHMM : workEnd;
         if (eveningStart < "23:00") {
           const eveningSlots = await getFreeSlotsForDay(userId, dateKey, preferences, {
@@ -111,13 +120,17 @@ export async function findNextFreeSlot(
         }
       }
 
-      // For today, filter out slots in the past
-      const effectiveSlots = dayOffset === 0
-        ? freeSlots.filter((s) => s.end.getTime() > now.getTime()).map((s) => ({
+      // Filter out slots before the effective cutoff (now, or startFrom if later)
+      const cutoff = searchStart.getTime() > now.getTime() ? searchStart : now;
+      const isSearchStartDay = dateToKey(targetDate) === dateToKey(searchStart);
+      const needsTimeFilter = isToday || (isSearchStartDay && searchStart.getTime() > now.getTime());
+
+      const effectiveSlots = needsTimeFilter
+        ? freeSlots.filter((s) => s.end.getTime() > cutoff.getTime()).map((s) => ({
             ...s,
-            start: s.start.getTime() < now.getTime() ? roundUpTo15Min(now) : s.start,
-            durationMinutes: s.start.getTime() < now.getTime()
-              ? Math.round((s.end.getTime() - roundUpTo15Min(now).getTime()) / 60000)
+            start: s.start.getTime() < cutoff.getTime() ? roundUpTo15Min(cutoff) : s.start,
+            durationMinutes: s.start.getTime() < cutoff.getTime()
+              ? Math.round((s.end.getTime() - roundUpTo15Min(cutoff).getTime()) / 60000)
               : s.durationMinutes,
           }))
         : freeSlots;
@@ -195,6 +208,67 @@ function filterByTimeWindow(slots: FreeSlot[], window: string): FreeSlot[] {
   });
 }
 
+/** Priority weight for scheduling order: lower = scheduled first */
+const PRIORITY_WEIGHT: Record<string, number> = {
+  asap: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
+/**
+ * Reschedule ALL pending (non-completed) tasks for a user in priority order.
+ * Higher priority → sooner deadline → longer duration tasks get the best slots.
+ * Deletes existing blocks for each task before re-scheduling.
+ */
+export async function rescheduleAllTasks(userId: string) {
+  const tasks = await prisma.task.findMany({
+    where: {
+      userId,
+      completed: false,
+      taskStatus: { notIn: ["completed", "cancelled"] },
+    },
+    include: { project: { select: { color: true } } },
+  });
+
+  // Sort: priority (asap>high>medium>low), then deadline (soonest first, null last),
+  // then duration (longest first to claim big slots before they fragment)
+  tasks.sort((a, b) => {
+    const pa = PRIORITY_WEIGHT[a.priority] ?? 2;
+    const pb = PRIORITY_WEIGHT[b.priority] ?? 2;
+    if (pa !== pb) return pa - pb;
+
+    // Deadline: soonest first, nulls last
+    const da = a.deadline ? new Date(a.deadline).getTime() : Infinity;
+    const db = b.deadline ? new Date(b.deadline).getTime() : Infinity;
+    if (da !== db) return da - db;
+
+    // Longest duration first
+    return b.durationMinutes - a.durationMinutes;
+  });
+
+  // Clear all existing blocks for these tasks first (batch delete)
+  const taskIds = tasks.map((t) => t.id);
+  if (taskIds.length > 0) {
+    await prisma.scheduledBlock.deleteMany({
+      where: { userId, taskId: { in: taskIds } },
+    });
+  }
+
+  // Schedule each in priority order so high-priority tasks claim the best slots
+  const results = [];
+  for (const task of tasks) {
+    try {
+      const block = await autoScheduleTaskInternal(userId, task);
+      if (block) results.push(block);
+    } catch (err) {
+      console.error(`Reschedule failed for task ${task.id}:`, err);
+    }
+  }
+
+  return results;
+}
+
 /**
  * Auto-schedule a task by finding free slots and creating ScheduledBlock(s).
  * NEW: If the task is too big for any single slot, it splits into chunks
@@ -209,26 +283,40 @@ export async function autoScheduleTask(userId: string, taskId: string) {
   if (!task || task.completed) return null;
 
   // Delete any existing scheduled blocks for this task before re-scheduling
-  // to prevent duplicate blocks when autoScheduleTask is called more than once.
   await prisma.scheduledBlock.deleteMany({
     where: { userId, taskId: task.id },
   });
 
+  return autoScheduleTaskInternal(userId, task);
+}
+
+/** Core scheduling logic — takes a task object directly (no DB fetch/delete). */
+async function autoScheduleTaskInternal(
+  userId: string,
+  task: { id: string; title: string; durationMinutes: number; priority: string; energyType: string; preferredTimeWindow: string | null; deadline?: Date | string | null; project?: { color: string } | null }
+) {
   let remainingMinutes = task.durationMinutes;
   const blocks = [];
 
   // ASAP tasks bypass time-window preference — schedule into the very next free slot
   const effectiveTimeWindow = task.priority === "asap" ? null : task.preferredTimeWindow;
 
+  // If the task has a deadline, start searching from the beginning of that day
+  // so habit tasks (deadline = their target day) get placed on the right day
+  const deadlineDate = task.deadline ? new Date(task.deadline) : null;
+  const startFrom = deadlineDate
+    ? new Date(deadlineDate.getFullYear(), deadlineDate.getMonth(), deadlineDate.getDate())
+    : null;
+
   // Keep scheduling chunks until the full task is placed (up to 3 chunks max)
-  // Use the task's own duration as the minimum when it's shorter than MIN_CHUNK_MINUTES
   const effectiveMinChunk = Math.min(MIN_CHUNK_MINUTES, task.durationMinutes);
   for (let i = 0; i < 3 && remainingMinutes >= effectiveMinChunk; i++) {
     const slot = await findNextFreeSlot(
       userId,
       remainingMinutes,
       effectiveTimeWindow,
-      task.energyType
+      task.energyType,
+      startFrom
     );
 
     if (!slot) break;
@@ -253,7 +341,6 @@ export async function autoScheduleTask(userId: string, taskId: string) {
     blocks.push(block);
     remainingMinutes -= chunkMinutes;
 
-    // If this wasn't a partial slot, we're done
     if (!slot.isPartial) break;
   }
 
