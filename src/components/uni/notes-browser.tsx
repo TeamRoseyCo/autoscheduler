@@ -134,7 +134,7 @@ export function NotesBrowser({ notes: initialNotes, courses }: NotesBrowserProps
               className="flex-1 px-2 py-1 text-xs rounded bg-[#12121c] border border-[#2a2a3c] text-gray-300"
             >
               <option value="all">All Courses</option>
-              {courses.map((c: any) => (
+              {courses.filter((c: any) => c.status === "active").map((c: any) => (
                 <option key={c.id} value={c.id}>{c.code}</option>
               ))}
             </select>
@@ -233,7 +233,7 @@ export function NotesBrowser({ notes: initialNotes, courses }: NotesBrowserProps
                         className="px-2 py-1 text-xs rounded bg-[#1e1e30] border border-[#2a2a3c] text-gray-300"
                       >
                         <option value="">No course</option>
-                        {courses.map((c: any) => (
+                        {courses.filter((c: any) => c.status === "active").map((c: any) => (
                           <option key={c.id} value={c.id}>{c.code}</option>
                         ))}
                       </select>

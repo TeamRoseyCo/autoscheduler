@@ -15,6 +15,7 @@ interface CreateEventBody {
   transportBefore?: number;
   transportAfter?: number;
   transportMode?: string;
+  allDay?: boolean;
 }
 
 export async function POST(request: NextRequest) {
@@ -81,6 +82,7 @@ export async function POST(request: NextRequest) {
         transportBefore: body.transportBefore ?? null,
         transportAfter: body.transportAfter ?? null,
         transportMode: body.transportMode || null,
+        allDay: body.allDay || false,
       },
     });
 

@@ -3,12 +3,15 @@
 import { useState } from "react";
 import type { CalendarEventData } from "@/components/week-calendar";
 import { EmojiText } from "@/components/emoji-text";
+import { isLaylatulQadr, toHijri } from "@/lib/hijri";
 
 interface MonthViewProps {
   currentDate: Date;
   events: CalendarEventData[];
   onDateClick: (date: Date) => void;
   onEventClick?: (event: CalendarEventData) => void;
+  showHijri?: boolean;
+  showLaylatulQadr?: boolean;
 }
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -78,7 +81,7 @@ function compactTitle(title: string): string {
   return title.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}]\uFE0F?\s*/u, "");
 }
 
-export function MonthView({ currentDate, events, onDateClick, onEventClick }: MonthViewProps) {
+export function MonthView({ currentDate, events, onDateClick, onEventClick, showHijri = false, showLaylatulQadr = false }: MonthViewProps) {
   const weeks = getMonthGrid(currentDate);
   const todayKey = dateToKey(new Date());
   const currentMonth = currentDate.getMonth();
@@ -133,17 +136,28 @@ export function MonthView({ currentDate, events, onDateClick, onEventClick }: Mo
                     onClick={() => onDateClick(day)}
                     className="flex items-center p-1 hover:bg-[#1a1a2a] transition-colors"
                   >
-                    <span
-                      className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${
-                        isToday
-                          ? "bg-blue-500 text-white"
-                          : isCurrentMonth
-                          ? "text-gray-300"
-                          : "text-gray-600"
-                      }`}
-                    >
-                      {day.getDate()}
+                    <span className="relative">
+                      {showLaylatulQadr && isLaylatulQadr(day) && (
+                        <span className="absolute inset-0 -m-0.5 rounded-full ring-2 ring-red-500/70" />
+                      )}
+                      <span
+                        className={`relative z-10 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${
+                          isToday
+                            ? "bg-blue-500 text-white"
+                            : isCurrentMonth
+                            ? "text-gray-300"
+                            : "text-gray-600"
+                        }`}
+                      >
+                        {day.getDate()}
+                      </span>
                     </span>
+                    {showHijri && isCurrentMonth && (() => {
+                      const h = toHijri(day);
+                      return h.day > 0 ? (
+                        <span className="text-[8px] text-amber-500/50 ml-0.5">{h.day}</span>
+                      ) : null;
+                    })()}
                     {dayEvents.length > 0 && (
                       <span className="ml-auto text-[10px] text-gray-500 pr-1">
                         {dayEvents.length}

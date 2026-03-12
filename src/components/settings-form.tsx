@@ -4,6 +4,7 @@ import { useActionState, useState, useEffect } from "react";
 import { savePreferences } from "@/lib/actions/preferences";
 import { UniPluginToggle } from "./uni/uni-plugin-toggle";
 import type { Preferences } from "@/generated/prisma/client";
+import { isRamadan } from "@/lib/hijri";
 
 interface SavedPlace {
   name: string;
@@ -394,6 +395,16 @@ export function SettingsForm({
         </div>
       </section>
 
+      {/* Ramadan Mode */}
+      <section className="space-y-4 border-t pt-8">
+        <h2 className="text-lg font-semibold text-gray-900">Muslim Tracker</h2>
+        <p className="text-sm text-gray-500">
+          Fasting tracker, prayer tracker, Laylatul Qadr markers, moon phase, and Hijri dates.
+          Automatically enabled during Ramadan.
+        </p>
+        <RamadanToggle />
+      </section>
+
       {/* Plugins Section */}
       <section className="space-y-4 border-t pt-8">
         <h2 className="text-lg font-semibold text-gray-900">Plugins</h2>
@@ -421,5 +432,51 @@ export function SettingsForm({
         {isPending ? "Saving..." : "Save Preferences"}
       </button>
     </form>
+  );
+}
+
+function RamadanToggle() {
+  const [enabled, setEnabled] = useState(false);
+  const autoEnabled = isRamadan(new Date());
+
+  useEffect(() => {
+    const manual = localStorage.getItem("ramadan-mode");
+    setEnabled(manual !== null ? manual === "true" : autoEnabled);
+  }, [autoEnabled]);
+
+  const toggle = () => {
+    const next = !enabled;
+    setEnabled(next);
+    localStorage.setItem("ramadan-mode", String(next));
+    if (next) {
+      localStorage.setItem("show-hijri", "true");
+    }
+    // Dispatch storage event so other components pick it up
+    window.dispatchEvent(new StorageEvent("storage", { key: "ramadan-mode", newValue: String(next) }));
+  };
+
+  return (
+    <label className="flex items-center gap-3 cursor-pointer group">
+      <div
+        className={`relative w-11 h-6 rounded-full transition-colors ${
+          enabled ? "bg-amber-500" : "bg-gray-300"
+        }`}
+        onClick={toggle}
+      >
+        <div
+          className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+            enabled ? "translate-x-5" : "translate-x-0.5"
+          }`}
+        />
+      </div>
+      <div>
+        <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors">
+          {enabled ? "Enabled" : "Disabled"}
+        </span>
+        {enabled && (
+          <span className="ml-2 text-xs text-amber-600">Ramadan Mubarak!</span>
+        )}
+      </div>
+    </label>
   );
 }

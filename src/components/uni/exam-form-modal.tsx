@@ -109,7 +109,7 @@ export function ExamFormModal({ isOpen, onClose, onSaved, courses, exam }: ExamF
               onChange={(e) => setCourseId(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-[#12121c] border border-[#2a2a3c] text-white text-sm focus:outline-none focus:border-blue-500"
             >
-              {courses.map((c: any) => (
+              {courses.filter((c: any) => c.status === "active").map((c: any) => (
                 <option key={c.id} value={c.id}>{c.code} - {c.name}</option>
               ))}
             </select>

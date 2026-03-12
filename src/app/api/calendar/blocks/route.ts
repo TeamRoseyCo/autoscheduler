@@ -39,6 +39,8 @@ export async function GET(request: NextRequest) {
     include: {
       task: {
         select: {
+          deadline: true,
+          deadlineTime: true,
           metric: {
             select: { id: true, name: true, unit: true, icon: true },
           },

@@ -51,7 +51,7 @@ function startNextServer() {
       nextProcess = spawn(npmCmd, ["run", "dev"], {
         cwd,
         stdio: "pipe",
-        shell: true,
+        shell: process.platform === "win32" ? "powershell.exe" : true,
         windowsHide: true,
       });
     } else {
@@ -59,7 +59,7 @@ function startNextServer() {
       nextProcess = spawn(process.execPath, [nextBin, "start"], {
         cwd,
         stdio: "pipe",
-        shell: true,
+        shell: process.platform === "win32" ? "powershell.exe" : true,
         env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
         windowsHide: true,
       });

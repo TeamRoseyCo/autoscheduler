@@ -407,6 +407,24 @@ export function EventDetailModal({ event, onClose, onSaved, onStartTask, onStopT
           </div>
         </div>
 
+        {/* Task Deadline */}
+        {event.taskId && event.taskDeadline && (
+          <div className="px-6 pb-2 pt-1">
+            <div className="flex items-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="text-red-400 flex-shrink-0">
+                <rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+                <path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                <circle cx="8" cy="9.5" r="1" fill="currentColor" />
+              </svg>
+              <span className="text-xs text-red-300 font-medium">Deadline:</span>
+              <span className="text-xs text-red-200">
+                {formatDateLabel(new Date(event.taskDeadline).toISOString().split("T")[0])}
+                {event.taskDeadlineTime && ` at ${formatTimeLabel(event.taskDeadlineTime)}`}
+              </span>
+            </div>
+          </div>
+        )}
+
         <div className="h-px bg-[#2a2a3c] mx-6" />
 
         {/* Event details section */}

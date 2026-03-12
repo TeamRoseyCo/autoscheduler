@@ -9,10 +9,12 @@ interface EventContextMenuProps {
   y: number;
   status: "scheduled" | "in_progress" | "completed";
   hasTask?: boolean;
+  isLocked?: boolean;
   onStartTask: () => void;
   onStopTask: () => void;
   onMarkComplete: () => void;
   onReschedule: (when: RescheduleWhen) => void;
+  onDelete: () => void;
   onClose: () => void;
 }
 
@@ -21,10 +23,12 @@ export function EventContextMenu({
   y,
   status,
   hasTask,
+  isLocked,
   onStartTask,
   onStopTask,
   onMarkComplete,
   onReschedule,
+  onDelete,
   onClose,
 }: EventContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
@@ -162,6 +166,19 @@ export function EventContextMenu({
           </button>
         </>
       )}
+
+      {/* Delete */}
+      <div className="h-px bg-[#2a2a3c] my-1" />
+      <button
+        onClick={() => { onDelete(); onClose(); }}
+        disabled={isLocked}
+        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-red-400">
+          <path d="M3 3.5h8M5.5 3.5V2.5a1 1 0 011-1h1a1 1 0 011 1v1M4.5 3.5l.5 8h4l.5-8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        {isLocked ? "Locked" : "Delete"}
+      </button>
     </div>
   );
 }

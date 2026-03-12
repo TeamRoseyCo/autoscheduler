@@ -135,6 +135,7 @@ model ScheduledBlock {
   transportAfter  Int?      // travel minutes after event
   transportMode   String?   // "driving" | "transit" | "walking" | "cycling"
   locked          Boolean   @default(false)
+  allDay          Boolean   @default(false)
   createdAt       DateTime  @default(now())
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   task            Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
@@ -386,6 +387,8 @@ model Habit {
   emoji           String   @default("🔄")
   durationMinutes Int      @default(30)
   frequency       String   @default("daily") // "daily" | "weekdays" | "1,3,5" (CSV day numbers, 0=Sun)
+  timesPerWeek    Int?     // e.g. 3 = any 3 days per week (overrides frequency when set)
+  deadlineTime    String?  // "HH:MM" — habit must be done by this time each day (null = end of day)
   projectId       String?
   preferredTime   String?  // "morning" | "afternoon" | "evening"
   energyType      String   @default("light")

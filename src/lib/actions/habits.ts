@@ -12,6 +12,8 @@ const habitSchema = z.object({
   emoji: z.string().optional().default("🔄"),
   durationMinutes: z.coerce.number().int().min(5).max(480),
   frequency: z.string().min(1),
+  timesPerWeek: z.coerce.number().int().min(1).max(7).optional(),
+  deadlineTime: z.string().optional().default(""), // "HH:MM" or ""
   projectId: z.string().optional().default(""),
   preferredTime: z.string().optional().default(""),
   energyType: z.enum(["deep", "light", "admin"]),
@@ -46,6 +48,8 @@ export async function createHabit(formData: FormData) {
       emoji: data.emoji || "🔄",
       durationMinutes: data.durationMinutes,
       frequency: data.frequency,
+      timesPerWeek: data.timesPerWeek || null,
+      deadlineTime: data.deadlineTime || null,
       projectId: data.projectId || null,
       preferredTime: data.preferredTime || null,
       energyType: data.energyType,
@@ -70,6 +74,8 @@ export async function updateHabit(id: string, formData: FormData) {
       emoji: data.emoji || "🔄",
       durationMinutes: data.durationMinutes,
       frequency: data.frequency,
+      timesPerWeek: data.timesPerWeek || null,
+      deadlineTime: data.deadlineTime || null,
       projectId: data.projectId || null,
       preferredTime: data.preferredTime || null,
       energyType: data.energyType,
@@ -124,7 +130,20 @@ function formatDate(d: Date): string {
 }
 
 /** Compute which days of the week a habit applies to */
-function getHabitDays(frequency: string): number[] {
+function getHabitDays(frequency: string, timesPerWeek?: number | null): number[] {
+  if (timesPerWeek && timesPerWeek >= 1 && timesPerWeek <= 7) {
+    // Spread N days evenly across the week
+    const spreads: Record<number, number[]> = {
+      1: [3],           // Wed
+      2: [1, 4],        // Mon, Thu
+      3: [1, 3, 5],     // Mon, Wed, Fri
+      4: [1, 2, 4, 5],  // Mon, Tue, Thu, Fri
+      5: [1, 2, 3, 4, 5], // Weekdays
+      6: [1, 2, 3, 4, 5, 6], // Mon-Sat
+      7: [0, 1, 2, 3, 4, 5, 6], // Daily
+    };
+    return spreads[timesPerWeek] || [1, 3, 5];
+  }
   if (frequency === "daily") return [0, 1, 2, 3, 4, 5, 6];
   if (frequency === "weekdays") return [1, 2, 3, 4, 5];
   // CSV day numbers like "1,3,5"
@@ -145,7 +164,7 @@ export async function generateHabitsForWeek(weekStartInput?: string) {
   let created = 0;
 
   for (const habit of habits) {
-    const days = getHabitDays(habit.frequency);
+    const days = getHabitDays(habit.frequency, habit.timesPerWeek);
 
     for (const dayNum of days) {
       const monday = new Date(weekStart + "T00:00:00");
@@ -160,13 +179,17 @@ export async function generateHabitsForWeek(weekStartInput?: string) {
       });
       if (existing) continue;
 
+      // Use deadlineTime if set, otherwise default to end of day
+      const deadlineTimeStr = habit.deadlineTime || "23:59:59";
+      const deadlineSuffix = deadlineTimeStr.length === 5 ? `${deadlineTimeStr}:00` : deadlineTimeStr;
+
       // Create a Task — deadline pins it to that specific day
       const task = await prisma.task.create({
         data: {
           userId: session.user.id,
           title: `${habit.emoji} ${habit.title}`,
           durationMinutes: habit.durationMinutes,
-          deadline: new Date(dateKey + "T23:59:59"),
+          deadline: new Date(`${dateKey}T${deadlineSuffix}`),
           priority: "medium",
           energyType: habit.energyType,
           preferredTimeWindow: habit.preferredTime || null,

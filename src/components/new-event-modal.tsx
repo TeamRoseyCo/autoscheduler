@@ -48,12 +48,14 @@ function getTodayStr(): string {
 export function NewEventModal({ isOpen, onClose, onCreated, defaultDate, defaultStartTime, defaultEndTime }: NewEventModalProps) {
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(defaultDate || getTodayStr());
+  const [endDate, setEndDate] = useState(defaultDate || getTodayStr());
   const defaults = getDefaultTimes();
   const [startTime, setStartTime] = useState(defaultStartTime || defaults.startTime);
   const [endTime, setEndTime] = useState(defaultEndTime || defaults.endTime);
   const [color, setColor] = useState("indigo");
   const [availability, setAvailability] = useState("busy");
   const [description, setDescription] = useState("");
+  const [allDay, setAllDay] = useState(false);
   const [addToGoogle, setAddToGoogle] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -65,6 +67,7 @@ export function NewEventModal({ isOpen, onClose, onCreated, defaultDate, default
     if (isOpen) {
       setTitle("");
       setDate(defaultDate || getTodayStr());
+      setEndDate(defaultDate || getTodayStr());
       if (defaultStartTime) {
         setStartTime(defaultStartTime);
       } else {
@@ -80,6 +83,7 @@ export function NewEventModal({ isOpen, onClose, onCreated, defaultDate, default
       setColor("indigo");
       setAvailability("busy");
       setDescription("");
+      setAllDay(false);
       setAddToGoogle(false);
       setError("");
       setSubmitting(false);
@@ -131,8 +135,20 @@ export function NewEventModal({ isOpen, onClose, onCreated, defaultDate, default
         setError("Title is required");
         return;
       }
-      if (startTime >= endTime) {
-        setError("End time must be after start time");
+
+      let startISO: string;
+      let endISO: string;
+
+      if (allDay) {
+        startISO = new Date(`${date}T00:00:00`).toISOString();
+        endISO = new Date(`${endDate}T23:59:00`).toISOString();
+      } else {
+        startISO = new Date(`${date}T${startTime}:00`).toISOString();
+        endISO = new Date(`${endDate}T${endTime}:00`).toISOString();
+      }
+
+      if (new Date(endISO) <= new Date(startISO)) {
+        setError("End must be after start");
         return;
       }
 
@@ -140,8 +156,6 @@ export function NewEventModal({ isOpen, onClose, onCreated, defaultDate, default
       setError("");
 
       try {
-        const startISO = new Date(`${date}T${startTime}:00`).toISOString();
-        const endISO = new Date(`${date}T${endTime}:00`).toISOString();
 
         const res = await fetch("/api/calendar/events", {
           method: "POST",
@@ -152,8 +166,9 @@ export function NewEventModal({ isOpen, onClose, onCreated, defaultDate, default
             startTime: startISO,
             endTime: endISO,
             color,
-            availability,
+            availability: allDay ? "free" : availability,
             addToGoogle,
+            allDay,
             description: description.trim() || undefined,
           }),
         });
@@ -171,7 +186,7 @@ export function NewEventModal({ isOpen, onClose, onCreated, defaultDate, default
         setSubmitting(false);
       }
     },
-    [title, date, startTime, endTime, color, availability, addToGoogle, onCreated, onClose]
+    [title, date, endDate, startTime, endTime, color, availability, allDay, addToGoogle, description, onCreated, onClose]
   );
 
   if (!isOpen) return null;
@@ -218,37 +233,75 @@ export function NewEventModal({ isOpen, onClose, onCreated, defaultDate, default
           </div>
         </div>
 
-        {/* Date */}
-        <div>
-          <label className="block text-xs font-medium text-gray-400 mb-1.5">Date</label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full rounded-lg bg-[#12121c] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 transition-colors [color-scheme:dark]"
-          />
-        </div>
+        {/* All-day toggle */}
+        <label className="flex items-center gap-3 cursor-pointer group">
+          <div
+            className={`relative w-9 h-5 rounded-full transition-colors ${
+              allDay ? "bg-indigo-500" : "bg-[#2a2a3c]"
+            }`}
+            onClick={() => setAllDay(!allDay)}
+          >
+            <div
+              className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                allDay ? "translate-x-4" : "translate-x-0.5"
+              }`}
+            />
+          </div>
+          <span className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors">
+            All-day event
+          </span>
+        </label>
 
-        {/* Time row */}
+        {/* Start date + time */}
         <div className="flex gap-3">
           <div className="flex-1">
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">Start Time</label>
+            <label className="block text-xs font-medium text-gray-400 mb-1.5">{allDay ? "Start Date" : "Start Date"}</label>
             <input
-              type="time"
-              value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
+              type="date"
+              value={date}
+              onChange={(e) => {
+                setDate(e.target.value);
+                if (e.target.value > endDate) setEndDate(e.target.value);
+              }}
               className="w-full rounded-lg bg-[#12121c] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 transition-colors [color-scheme:dark]"
             />
           </div>
+          {!allDay && (
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-400 mb-1.5">Start Time</label>
+              <input
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                className="w-full rounded-lg bg-[#12121c] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 transition-colors [color-scheme:dark]"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* End date + time */}
+        <div className="flex gap-3">
           <div className="flex-1">
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">End Time</label>
+            <label className="block text-xs font-medium text-gray-400 mb-1.5">End Date</label>
             <input
-              type="time"
-              value={endTime}
-              onChange={(e) => setEndTime(e.target.value)}
+              type="date"
+              value={endDate}
+              min={date}
+              onChange={(e) => setEndDate(e.target.value)}
               className="w-full rounded-lg bg-[#12121c] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 transition-colors [color-scheme:dark]"
             />
           </div>
+          {!allDay && (
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-400 mb-1.5">End Time</label>
+              <input
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                className="w-full rounded-lg bg-[#12121c] border border-[#2a2a3c] px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 transition-colors [color-scheme:dark]"
+              />
+            </div>
+          )}
         </div>
 
         {/* Description with AI wand */}

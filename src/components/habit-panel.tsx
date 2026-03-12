@@ -65,7 +65,8 @@ interface ReviewItem {
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-function frequencyLabel(freq: string): string {
+function frequencyLabel(freq: string, timesPerWeek?: number | null): string {
+  if (timesPerWeek) return `${timesPerWeek}x / week`;
   if (freq === "daily") return "Every day";
   if (freq === "weekdays") return "Weekdays";
   return freq.split(",").map((s) => DAY_FULL[parseInt(s.trim(), 10)] || s).join(", ");
@@ -78,7 +79,15 @@ function durationLabel(mins: number): string {
   return m > 0 ? `${h}h${m}m` : `${h}h`;
 }
 
-function frequencyDots(freq: string): boolean[] {
+function frequencyDots(freq: string, timesPerWeek?: number | null): boolean[] {
+  if (timesPerWeek && timesPerWeek >= 1 && timesPerWeek <= 7) {
+    const spreads: Record<number, number[]> = {
+      1: [3], 2: [1, 4], 3: [1, 3, 5], 4: [1, 2, 4, 5],
+      5: [1, 2, 3, 4, 5], 6: [1, 2, 3, 4, 5, 6], 7: [0, 1, 2, 3, 4, 5, 6],
+    };
+    const active = new Set(spreads[timesPerWeek] || []);
+    return [0, 1, 2, 3, 4, 5, 6].map((d) => active.has(d));
+  }
   const active = new Set<number>();
   if (freq === "daily") [0, 1, 2, 3, 4, 5, 6].forEach((d) => active.add(d));
   else if (freq === "weekdays") [1, 2, 3, 4, 5].forEach((d) => active.add(d));
@@ -283,7 +292,7 @@ export function HabitPanel({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {activeHabits.map((habit) => {
                   const es = ENERGY_STYLES[habit.energyType] || ENERGY_STYLES.light;
-                  const dots = frequencyDots(habit.frequency);
+                  const dots = frequencyDots(habit.frequency, habit.timesPerWeek);
                   const isDeleting = confirmDelete === habit.id;
 
                   return (
@@ -307,9 +316,15 @@ export function HabitPanel({
                             )}
                           </div>
 
-                          <div className="flex items-center gap-2 mt-1.5">
+                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                             <span className="text-xs text-gray-500">{durationLabel(habit.durationMinutes)}</span>
                             <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${es.bg} ${es.text}`}>{es.label}</span>
+                            {habit.timesPerWeek && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-400">{habit.timesPerWeek}x/wk</span>
+                            )}
+                            {habit.deadlineTime && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/12 text-red-400">by {habit.deadlineTime}</span>
+                            )}
                             {habit.preferredTime && TIME_STYLES[habit.preferredTime] && (
                               <span className="text-[10px] text-gray-500 flex items-center gap-0.5">
                                 <AppleEmoji emoji={TIME_STYLES[habit.preferredTime].icon} size={10} />
@@ -461,14 +476,24 @@ function HabitForm({
   const [emoji, setEmoji] = useState(habit?.emoji || "🔄");
   const [title, setTitle] = useState(habit?.title || "");
   const [duration, setDuration] = useState(habit?.durationMinutes || 30);
-  const [freqMode, setFreqMode] = useState<"daily" | "weekdays" | "custom">(
-    habit ? (habit.frequency === "daily" ? "daily" : habit.frequency === "weekdays" ? "weekdays" : "custom") : "weekdays"
+  const [freqMode, setFreqMode] = useState<"daily" | "weekdays" | "custom" | "weekly">(
+    habit
+      ? habit.timesPerWeek
+        ? "weekly"
+        : habit.frequency === "daily"
+          ? "daily"
+          : habit.frequency === "weekdays"
+            ? "weekdays"
+            : "custom"
+      : "weekdays"
   );
   const [customDays, setCustomDays] = useState<number[]>(
     habit && habit.frequency !== "daily" && habit.frequency !== "weekdays"
       ? habit.frequency.split(",").map((s) => parseInt(s.trim(), 10))
       : [1, 3, 5]
   );
+  const [timesPerWeek, setTimesPerWeek] = useState(habit?.timesPerWeek || 3);
+  const [deadlineTime, setDeadlineTime] = useState(habit?.deadlineTime || "");
   const [energy, setEnergy] = useState(habit?.energyType || "light");
   const [time, setTime] = useState(habit?.preferredTime || "");
   const [projectId, setProjectId] = useState(habit?.projectId || "");
@@ -476,6 +501,7 @@ function HabitForm({
   const [saving, setSaving] = useState(false);
 
   const getFreq = () => {
+    if (freqMode === "weekly") return "daily"; // placeholder — timesPerWeek drives generation
     if (freqMode === "daily") return "daily";
     if (freqMode === "weekdays") return "weekdays";
     return customDays.sort((a, b) => a - b).join(",");
@@ -489,6 +515,8 @@ function HabitForm({
     fd.set("emoji", emoji);
     fd.set("durationMinutes", String(duration));
     fd.set("frequency", getFreq());
+    if (freqMode === "weekly") fd.set("timesPerWeek", String(timesPerWeek));
+    if (deadlineTime) fd.set("deadlineTime", deadlineTime);
     fd.set("energyType", energy);
     fd.set("preferredTime", time);
     fd.set("projectId", projectId);
@@ -564,8 +592,8 @@ function HabitForm({
       {/* Frequency */}
       <div>
         <label className="block text-xs text-gray-500 mb-2">Repeat</label>
-        <div className="flex gap-1.5 mb-2">
-          {(["daily", "weekdays", "custom"] as const).map((m) => (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {(["daily", "weekdays", "weekly", "custom"] as const).map((m) => (
             <button
               key={m}
               onClick={() => setFreqMode(m)}
@@ -575,10 +603,30 @@ function HabitForm({
                   : "bg-[#1e1e30] text-gray-500 hover:text-gray-300 hover:bg-[#2a2a3c]"
               }`}
             >
-              {m === "daily" ? "Every day" : m === "weekdays" ? "Weekdays" : "Custom"}
+              {m === "daily" ? "Every day" : m === "weekdays" ? "Weekdays" : m === "weekly" ? "X per week" : "Custom"}
             </button>
           ))}
         </div>
+        {freqMode === "weekly" && (
+          <div className="flex items-center gap-2 mt-2">
+            <div className="flex gap-1">
+              {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setTimesPerWeek(n)}
+                  className={`w-9 h-9 rounded-lg text-xs font-medium transition-all ${
+                    timesPerWeek === n
+                      ? "bg-violet-600 text-white shadow-lg shadow-violet-600/20"
+                      : "bg-[#1e1e30] text-gray-600 hover:text-gray-400 hover:bg-[#2a2a3c]"
+                  }`}
+                >
+                  {n}x
+                </button>
+              ))}
+            </div>
+            <span className="text-xs text-gray-600">per week</span>
+          </div>
+        )}
         {freqMode === "custom" && (
           <div className="flex gap-1.5 mt-2">
             {DAY_FULL.map((label, idx) => (
@@ -596,6 +644,30 @@ function HabitForm({
             ))}
           </div>
         )}
+      </div>
+
+      {/* Deadline time */}
+      <div>
+        <label className="block text-xs text-gray-500 mb-2">Must be done by</label>
+        <div className="flex items-center gap-2">
+          <input
+            type="time"
+            value={deadlineTime}
+            onChange={(e) => setDeadlineTime(e.target.value)}
+            className="bg-[#1e1e30] border border-[#2a2a3c] rounded-lg px-3 py-2 text-xs text-gray-300 focus:border-indigo-500/40 focus:outline-none transition-colors"
+          />
+          {deadlineTime && (
+            <button
+              onClick={() => setDeadlineTime("")}
+              className="text-xs text-gray-600 hover:text-gray-400 px-2 py-1 rounded-md hover:bg-[#2a2a3c] transition-colors"
+            >
+              Clear (end of day)
+            </button>
+          )}
+          {!deadlineTime && (
+            <span className="text-xs text-gray-600">No deadline — scheduled anytime</span>
+          )}
+        </div>
       </div>
 
       {/* Time + Energy + Project */}

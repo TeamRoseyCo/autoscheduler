@@ -34,14 +34,19 @@ export async function GET(request: NextRequest) {
     const timeMin = new Date(`${startDate}T00:00:00`).toISOString();
     const timeMax = new Date(`${endDate}T23:59:59`).toISOString();
 
-    const response = await calendar.events.list({
-      calendarId: "primary",
-      timeMin,
-      timeMax,
-      singleEvents: true,
-      orderBy: "startTime",
-      maxResults: 250,
-    });
+    const response = await Promise.race([
+      calendar.events.list({
+        calendarId: "primary",
+        timeMin,
+        timeMax,
+        singleEvents: true,
+        orderBy: "startTime",
+        maxResults: 250,
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Google Calendar request timed out after 12s")), 12000)
+      ),
+    ]);
 
     const rawEvents = (response.data.items || []).filter((event) => {
       if (!event.start?.dateTime || !event.end?.dateTime) return false;

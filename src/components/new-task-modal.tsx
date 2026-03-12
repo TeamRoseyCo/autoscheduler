@@ -76,13 +76,14 @@ export function NewTaskModal({ isOpen, onClose, onCreated, projects }: NewTaskMo
   const titleInputRef = useRef<HTMLInputElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
 
-  // Fetch metrics once
+  // Fetch metrics each time modal opens
   useEffect(() => {
+    if (!isOpen) return;
     fetch("/api/metrics")
       .then((res) => res.ok ? res.json() : [])
       .then(setMetrics)
       .catch(() => {});
-  }, []);
+  }, [isOpen]);
 
   // (metrics grouped by category handled inside MetricPicker)
 

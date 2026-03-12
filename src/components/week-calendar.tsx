@@ -21,10 +21,13 @@ import { CompletionDialog } from "@/components/completion-dialog";
 import { ProjectDetailModal } from "@/components/project-detail-modal";
 import { ProjectContextMenu } from "@/components/project-context-menu";
 import { EmojiText } from "@/components/emoji-text";
+import { RamadanPanel } from "@/components/ramadan-panel";
+import { RamadanToolbarOrnaments, RamadanColumnAccent, CrescentStar } from "@/components/ramadan-ornaments";
 import { scheduleTodayAction, restoreScheduleAction } from "@/lib/actions/schedule";
 import { rescheduleBlockForLater } from "@/lib/actions/reschedule";
 import type { RescheduleWhen } from "@/components/event-context-menu";
 import { deleteProject } from "@/lib/actions/projects";
+import { isLaylatulQadr, isRamadan, toHijri } from "@/lib/hijri";
 
 const HOUR_HEIGHT = 64;
 const START_HOUR = 0;
@@ -64,7 +67,10 @@ export interface CalendarEventData {
   transportAfter?: number;
   transportMode?: string;
   taskMetric?: { id: string; name: string; unit: string; icon: string } | null;
+  taskDeadline?: string;
+  taskDeadlineTime?: string;
   locked?: boolean;
+  allDay?: boolean;
 }
 
 // ---- Utilities ----
@@ -154,7 +160,7 @@ function blocksToEvents(blocks: ScheduledBlock[]): CalendarEventData[] {
       transportBefore?: number | null;
       transportAfter?: number | null;
       transportMode?: string | null;
-      task?: { metric?: { id: string; name: string; unit: string; icon: string } | null } | null;
+      task?: { deadline?: Date | string | null; deadlineTime?: string | null; metric?: { id: string; name: string; unit: string; icon: string } | null } | null;
     };
     return {
       id: b.id,
@@ -179,7 +185,12 @@ function blocksToEvents(blocks: ScheduledBlock[]): CalendarEventData[] {
       transportAfter: block.transportAfter ?? undefined,
       transportMode: block.transportMode || undefined,
       taskMetric: block.task?.metric ?? null,
+      taskDeadline: block.task?.deadline
+        ? (typeof block.task.deadline === "string" ? block.task.deadline : new Date(block.task.deadline).toISOString())
+        : undefined,
+      taskDeadlineTime: block.task?.deadlineTime || undefined,
       locked: b.locked || false,
+      allDay: b.allDay || false,
     };
   });
 }
@@ -858,6 +869,18 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
   });
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [habitPanelOpen, setHabitPanelOpen] = useState(false);
+  const [ramadanPanelOpen, setRamadanPanelOpen] = useState(false);
+  const [ramadanMode, setRamadanMode] = useState(() => {
+    if (typeof window === "undefined") return false;
+    // Auto-enable during Ramadan, or respect manual setting
+    const manual = localStorage.getItem("ramadan-mode");
+    if (manual !== null) return manual === "true";
+    return isRamadan(new Date());
+  });
+  const [showHijri, setShowHijri] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("show-hijri") === "true";
+  });
   const [showGoogleEvents, setShowGoogleEvents] = useState(true);
   const [showLocalEvents, setShowLocalEvents] = useState(true);
   const [newEventModalOpen, setNewEventModalOpen] = useState(false);
@@ -890,6 +913,22 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
   useEffect(() => {
     localStorage.setItem("calendar-sidebar-open", String(sidebarOpen));
   }, [sidebarOpen]);
+
+  useEffect(() => {
+    localStorage.setItem("show-hijri", String(showHijri));
+  }, [showHijri]);
+
+  // Listen for ramadan-mode changes from settings
+  useEffect(() => {
+    const handler = (e: StorageEvent) => {
+      if (e.key === "ramadan-mode") {
+        setRamadanMode(e.newValue === "true");
+        if (e.newValue === "true") setShowHijri(true);
+      }
+    };
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
+  }, []);
 
   // Merge and filter events
   const allEvents = mergeEvents(
@@ -1307,6 +1346,29 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
     }
   }, [contextMenu, fetchAllEvents, fetchProjects, currentDate, view]);
 
+  const handleDeleteEvent = useCallback(async () => {
+    if (!contextMenu) return;
+    const event = contextMenu.event;
+    setContextMenu(null);
+    if (event.source === "google") {
+      setToastMessage("Cannot delete Google Calendar events from here");
+      return;
+    }
+    try {
+      const res = await fetch(`/api/calendar/blocks/${event.id}`, { method: "DELETE" });
+      if (res.ok) {
+        setToastMessage("Event deleted");
+        await fetchAllEvents(currentDate, view);
+        fetchProjects();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setToastMessage(data.error || "Failed to delete event");
+      }
+    } catch {
+      setToastMessage("Failed to delete event");
+    }
+  }, [contextMenu, fetchAllEvents, fetchProjects, currentDate, view]);
+
   // ---- Drag to move ----
   const handleDragStart = useCallback(
     (event: CalendarEventData, mouseY: number, top: number, height: number, mouseX: number) => {
@@ -1590,7 +1652,8 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
       {/* Main Calendar Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Toolbar */}
-        <div className="flex items-center justify-between px-4 py-2 bg-[#16161f] border-b border-[#2a2a3c] flex-shrink-0">
+        <div className={`flex items-center justify-between px-4 py-2 bg-[#16161f] border-b flex-shrink-0 relative overflow-visible ${ramadanMode ? "border-amber-500/20" : "border-[#2a2a3c]"}`}>
+          {ramadanMode && <RamadanToolbarOrnaments />}
           <div className="flex items-center gap-2">
             <button
               onClick={goToToday}
@@ -1610,7 +1673,10 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
             >
               <ChevronRight />
             </button>
-            <h2 className="text-lg font-semibold text-gray-100 ml-1">{getHeaderText()}</h2>
+            <h2 className="text-lg font-semibold text-gray-100 ml-1 flex items-center gap-1.5">
+              {ramadanMode && <CrescentStar className="text-amber-400" />}
+              {getHeaderText()}
+            </h2>
             {(loading || scheduling) && (
               <div className="ml-2 h-4 w-4 animate-spin rounded-full border-2 border-gray-600 border-t-gray-300" />
             )}
@@ -1650,6 +1716,22 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
               </svg>
               <span className="hidden sm:inline">Habits</span>
             </button>
+            {ramadanMode && (
+              <button
+                onClick={() => setRamadanPanelOpen((v) => !v)}
+                className={`rounded-lg px-3 py-1.5 text-sm transition-colors flex items-center gap-1.5 ${
+                  ramadanPanelOpen
+                    ? "text-amber-300 bg-amber-600/20"
+                    : "text-gray-400 hover:text-gray-200 hover:bg-[#2a2a3c]"
+                }`}
+                title="Muslim Tracker"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span className="hidden sm:inline">Muslim</span>
+              </button>
+            )}
             <NewDropdown
               onNewEvent={() => setNewEventModalOpen(true)}
               onNewTask={() => setNewTaskModalOpen(true)}
@@ -1718,38 +1800,96 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
             events={allEvents}
             onDateClick={handleDateSelect}
             onEventClick={(ev) => setSelectedEvent(ev)}
+            showHijri={showHijri}
+            showLaylatulQadr={ramadanMode}
           />
         ) : (
           <>
             {/* Day Headers */}
-            <div className="flex bg-[#16161f] border-b border-[#2a2a3c] flex-shrink-0">
+            <div className="flex bg-[#16161f] border-b border-[#2a2a3c] flex-shrink-0 relative">
+              {ramadanMode && <RamadanColumnAccent />}
               <div className="w-[60px] flex-shrink-0 flex items-center justify-center">
                 <span className="text-[10px] text-gray-600 font-medium">GMT+</span>
               </div>
               {visibleDates.map((date) => {
                 const key = dateToKey(date);
                 const isToday = key === todayKey;
+                const isLQ = ramadanMode && isLaylatulQadr(date);
+                const hijriDay = showHijri ? toHijri(date) : null;
                 return (
                   <div
                     key={key}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 border-l border-[#2a2a3c] ${
+                    className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 border-l border-[#2a2a3c] ${
                       isToday ? "bg-[#1a1a30]" : ""
                     }`}
                   >
                     <span className={`text-xs font-medium uppercase tracking-wide ${isToday ? "text-blue-400" : "text-gray-500"}`}>
                       {DAY_NAMES_SHORT[date.getDay()]}
                     </span>
-                    <span
-                      className={`flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold ${
-                        isToday ? "bg-blue-500 text-white" : "text-gray-300"
-                      }`}
-                    >
-                      {date.getDate()}
+                    <span className="relative">
+                      {isLQ && (
+                        <span className="absolute inset-0 -m-0.5 rounded-full ring-2 ring-red-500/70 animate-pulse" style={{ animationDuration: "2s" }} />
+                      )}
+                      <span
+                        className={`relative z-10 flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold ${
+                          isToday ? "bg-blue-500 text-white" : "text-gray-300"
+                        }`}
+                      >
+                        {date.getDate()}
+                      </span>
                     </span>
+                    {showHijri && hijriDay && hijriDay.day > 0 && (
+                      <span className="text-[8px] text-amber-500/50 leading-none">{hijriDay.day} {hijriDay.monthName.substring(0, 3)}</span>
+                    )}
                   </div>
                 );
               })}
             </div>
+
+            {/* All-day events row */}
+            {(() => {
+              const allDayEvents = allEvents.filter((e) => e.allDay);
+              if (allDayEvents.length === 0) return null;
+              const allDayByDate: Record<string, CalendarEventData[]> = {};
+              for (const ev of allDayEvents) {
+                if (!allDayByDate[ev.date]) allDayByDate[ev.date] = [];
+                allDayByDate[ev.date].push(ev);
+              }
+              const hasAny = visibleDates.some((d) => allDayByDate[dateToKey(d)]?.length);
+              if (!hasAny) return null;
+              return (
+                <div className="flex border-b border-[#2a2a3c] flex-shrink-0 bg-[#16161f]">
+                  <div className="w-[60px] flex-shrink-0 flex items-center justify-center">
+                    <span className="text-[9px] text-gray-600">all-day</span>
+                  </div>
+                  {visibleDates.map((date) => {
+                    const k = dateToKey(date);
+                    const evts = allDayByDate[k] || [];
+                    return (
+                      <div key={k} className="flex-1 border-l border-[#2a2a3c] px-0.5 py-1 space-y-0.5 min-w-0">
+                        {evts.map((ev) => (
+                          <button
+                            key={ev.id}
+                            onClick={() => setSelectedEvent(ev)}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              setContextMenu({ event: ev, x: e.clientX, y: e.clientY });
+                            }}
+                            className={`w-full rounded px-1.5 py-0.5 text-[10px] truncate text-left hover:brightness-125 transition-all ${
+                              ev.color === "emerald"
+                                ? "bg-emerald-500/20 border border-emerald-500/30 text-emerald-200"
+                                : "bg-rose-500/20 border border-rose-500/30 text-rose-200"
+                            }`}
+                          >
+                            {ev.title.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}]\uFE0F?\s*/u, "")}
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
 
             {/* Scrollable Time Grid */}
             <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden">
@@ -1771,7 +1911,7 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
                 {visibleDates.map((date) => {
                   const key = dateToKey(date);
                   const isToday = key === todayKey;
-                  const dayEvents = eventsByDate[key] || [];
+                  const dayEvents = (eventsByDate[key] || []).filter((e) => !e.allDay);
 
                   // Compute grid-drag placeholder for this column
                   const showPlaceholder = gridDrag && gridDrag.dateKey === key;
@@ -1960,6 +2100,9 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
           onToggleGoogleEvents={() => setShowGoogleEvents((v) => !v)}
           showLocalEvents={showLocalEvents}
           onToggleLocalEvents={() => setShowLocalEvents((v) => !v)}
+          showHijri={showHijri}
+          onToggleHijri={() => setShowHijri((v) => !v)}
+          ramadanMode={ramadanMode}
         />
       )}
 
@@ -2035,6 +2178,7 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
           y={contextMenu.y}
           status={contextMenu.event.status || "scheduled"}
           hasTask={!!contextMenu.event.taskId}
+          isLocked={contextMenu.event.locked}
           onStartTask={contextMenu.event.status === "completed" ? handleRevertToScheduled : handleStartTask}
           onStopTask={handleStopTask}
           onMarkComplete={() => {
@@ -2042,6 +2186,7 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
             setContextMenu(null);
           }}
           onReschedule={handleRescheduleForLater}
+          onDelete={handleDeleteEvent}
           onClose={() => setContextMenu(null)}
         />
       )}
@@ -2076,6 +2221,14 @@ export function WeekCalendar({ initialBlocks, initialDate, initialProjects = [] 
         isOpen={habitPanelOpen}
         onClose={() => setHabitPanelOpen(false)}
         onGenerated={() => fetchAllEvents(currentDate, view)}
+      />
+
+      {/* Ramadan Panel */}
+      <RamadanPanel
+        isOpen={ramadanPanelOpen}
+        onClose={() => setRamadanPanelOpen(false)}
+        onEventCreated={() => fetchAllEvents(currentDate, view)}
+        currentDate={currentDate}
       />
 
       {/* Smart Import FAB */}
