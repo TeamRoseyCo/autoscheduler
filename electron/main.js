@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, session } = require("electron");
+const { app, BrowserWindow, shell, session, Menu } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const net = require("net");
@@ -132,12 +132,33 @@ async function createWindow() {
     mainWindow.webContents.focus();
   });
 
+  // Re-focus webContents after each page load (e.g. loading screen → Next.js)
+  mainWindow.webContents.on("did-finish-load", () => {
+    mainWindow?.webContents.focus();
+  });
+
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
 }
 
 app.on("ready", async () => {
+  // Build a minimal menu so standard keyboard shortcuts (Ctrl+C/V/X/A, undo/redo) work
+  const menu = Menu.buildFromTemplate([
+    {
+      label: "Edit",
+      submenu: [
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "selectAll" },
+      ],
+    },
+  ]);
+  Menu.setApplicationMenu(menu);
   // ── Autostart on Windows login (only when packaged) ──
   if (!isDev) {
     try {
