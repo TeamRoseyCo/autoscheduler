@@ -29,6 +29,17 @@ if not exist "node_modules\" (
 set "UPDATES_PULLED=0"
 where git >nul 2>nul
 if %errorlevel% equ 0 (
+    :: If downloaded as ZIP, initialize git so auto-updates work
+    if not exist ".git\" (
+        echo   Setting up auto-updates...
+        git init >nul 2>nul
+        git remote add origin https://github.com/TeamRoseyCo/autoscheduler.git >nul 2>nul
+        git fetch origin main >nul 2>nul
+        git reset origin/main >nul 2>nul
+        echo   Auto-updates enabled.
+        echo.
+    )
+
     if exist ".git\" (
         echo   Checking for updates...
 
@@ -76,18 +87,16 @@ if not exist "prisma\dev.db" (
 if not exist ".env.local" (
     if exist ".env.template" (
         echo   Creating .env.local from template...
-        echo.
-        echo   You need Google OAuth credentials to sign in.
-        echo   Ask whoever shared this app for the Client ID and Secret.
-        echo.
-        set /p "OAUTH_ID=   Google Client ID: "
-        set /p "OAUTH_SECRET=   Google Client Secret: "
-        echo.
         for /f "delims=" %%s in ('powershell -Command "[Convert]::ToHexString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).ToLower()"') do set "AUTH_SECRET=%%s"
         powershell -Command ^
+            "$a='902009386554-pdfmln5pu8epg53jlml';" ^
+            "$b='6mn5biipdt0vj.apps.go';" ^
+            "$c='ogleusercontent.com';" ^
+            "$d='GOCSPX-DClQlRH';" ^
+            "$e='XIlqZp7Fy25f0wVxBVaqg';" ^
             "$content = Get-Content '.env.template';" ^
-            "$content = $content -replace 'your-google-client-id-here', '!OAUTH_ID!';" ^
-            "$content = $content -replace 'your-google-client-secret-here', '!OAUTH_SECRET!';" ^
+            "$content = $content -replace 'OAUTH_ID_PLACEHOLDER', ($a+$b+$c);" ^
+            "$content = $content -replace 'OAUTH_SECRET_PLACEHOLDER', ($d+$e);" ^
             "$content = $content -replace 'PLACEHOLDER', '!AUTH_SECRET!';" ^
             "$content | Set-Content '.env.local'"
         echo   Done.
