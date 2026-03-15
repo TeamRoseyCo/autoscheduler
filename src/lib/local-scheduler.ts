@@ -255,11 +255,21 @@ export async function rescheduleAllTasks(userId: string) {
     });
   }
 
+  // Identify habit tasks so they are pinned to their specific day only (maxDays=1)
+  const habitGenerations = taskIds.length > 0
+    ? await prisma.habitGeneration.findMany({
+        where: { taskId: { in: taskIds } },
+        select: { taskId: true },
+      })
+    : [];
+  const habitTaskIds = new Set(habitGenerations.map((g) => g.taskId));
+
   // Schedule each in priority order so high-priority tasks claim the best slots
   const results = [];
   for (const task of tasks) {
     try {
-      const block = await autoScheduleTaskInternal(userId, task);
+      const isHabit = habitTaskIds.has(task.id);
+      const block = await autoScheduleTaskInternal(userId, task, isHabit ? { maxDays: 1 } : undefined);
       if (block) results.push(block);
     } catch (err) {
       console.error(`Reschedule failed for task ${task.id}:`, err);
@@ -274,7 +284,7 @@ export async function rescheduleAllTasks(userId: string) {
  * NEW: If the task is too big for any single slot, it splits into chunks
  * across multiple gaps, filling dead time intelligently.
  */
-export async function autoScheduleTask(userId: string, taskId: string) {
+export async function autoScheduleTask(userId: string, taskId: string, maxDays?: number) {
   const task = await prisma.task.findUnique({
     where: { id: taskId, userId },
     include: { project: { select: { color: true } } },
@@ -287,13 +297,14 @@ export async function autoScheduleTask(userId: string, taskId: string) {
     where: { userId, taskId: task.id },
   });
 
-  return autoScheduleTaskInternal(userId, task);
+  return autoScheduleTaskInternal(userId, task, maxDays ? { maxDays } : undefined);
 }
 
 /** Core scheduling logic — takes a task object directly (no DB fetch/delete). */
 async function autoScheduleTaskInternal(
   userId: string,
-  task: { id: string; title: string; durationMinutes: number; priority: string; energyType: string; preferredTimeWindow: string | null; deadline?: Date | string | null; project?: { color: string } | null }
+  task: { id: string; title: string; durationMinutes: number; priority: string; energyType: string; preferredTimeWindow: string | null; deadline?: Date | string | null; project?: { color: string } | null },
+  options?: { maxDays?: number }
 ) {
   let remainingMinutes = task.durationMinutes;
   const blocks = [];
@@ -316,7 +327,8 @@ async function autoScheduleTaskInternal(
       remainingMinutes,
       effectiveTimeWindow,
       task.energyType,
-      startFrom
+      startFrom,
+      options?.maxDays
     );
 
     if (!slot) break;

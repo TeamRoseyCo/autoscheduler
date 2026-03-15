@@ -173,11 +173,20 @@ export async function generateHabitsForWeek(weekStartInput?: string) {
       targetDate.setDate(monday.getDate() + offset);
       const dateKey = formatDate(targetDate);
 
-      // Skip if already generated for this habit+date
+      // Skip if already generated for this habit+date — but check for orphans
       const existing = await prisma.habitGeneration.findUnique({
         where: { habitId_date: { habitId: habit.id, date: dateKey } },
       });
-      if (existing) continue;
+      if (existing) {
+        // Check if the linked task still exists (user may have deleted it)
+        const taskExists = await prisma.task.findUnique({
+          where: { id: existing.taskId },
+          select: { id: true },
+        });
+        if (taskExists) continue;
+        // Task was deleted — remove orphaned generation so we can recreate
+        await prisma.habitGeneration.delete({ where: { id: existing.id } });
+      }
 
       // Use deadlineTime if set, otherwise default to end of day
       const deadlineTimeStr = habit.deadlineTime || "23:59:59";
@@ -308,9 +317,9 @@ export async function resolveHabitInstance(
       data: { status: "skipped" },
     });
   } else if (action === "reschedule") {
-    // Re-schedule the task for this week
+    // Re-schedule the task pinned to its target day only
     try {
-      await autoScheduleTask(session.user.id, gen.taskId);
+      await autoScheduleTask(session.user.id, gen.taskId, 1);
       await prisma.habitGeneration.update({
         where: { id: generationId },
         data: { status: "rescheduled" },
@@ -331,4 +340,104 @@ export async function bulkResolveHabits(
   for (const id of generationIds) {
     await resolveHabitInstance(id, action);
   }
+}
+
+/**
+ * Force-regenerate all habits for the week.
+ * Deletes existing generations + their tasks/blocks, then recreates everything.
+ */
+export async function regenerateHabitsForWeek(weekStartInput?: string) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Not authenticated");
+
+  const weekStart = weekStartInput || getMonday(new Date());
+
+  // Find all generations for this week
+  const generations = await prisma.habitGeneration.findMany({
+    where: { userId: session.user.id, weekStart },
+  });
+
+  // Delete associated blocks and tasks
+  const taskIds = generations.map((g) => g.taskId);
+  if (taskIds.length > 0) {
+    await prisma.scheduledBlock.deleteMany({
+      where: { taskId: { in: taskIds } },
+    });
+    await prisma.task.deleteMany({
+      where: { id: { in: taskIds }, userId: session.user.id },
+    });
+  }
+
+  // Delete all generation records
+  await prisma.habitGeneration.deleteMany({
+    where: { userId: session.user.id, weekStart },
+  });
+
+  // Now regenerate
+  return generateHabitsForWeek(weekStart);
+}
+
+/**
+ * Check whether habits are properly scheduled on their correct day this week.
+ * Returns status info the UI can use to offer regeneration.
+ */
+export async function getHabitsWeekStatus(weekStartInput?: string) {
+  const session = await auth();
+  if (!session?.user?.id) return null;
+
+  const weekStart = weekStartInput || getMonday(new Date());
+
+  const generations = await prisma.habitGeneration.findMany({
+    where: { userId: session.user.id, weekStart },
+    select: { id: true, taskId: true, date: true },
+  });
+
+  if (generations.length === 0) {
+    return { generated: false, total: 0, scheduled: 0, issues: 0 };
+  }
+
+  const taskIds = generations.map((g) => g.taskId);
+
+  // Check which tasks still exist
+  const tasks = await prisma.task.findMany({
+    where: { id: { in: taskIds } },
+    select: { id: true, completed: true },
+  });
+  const taskMap = new Map(tasks.map((t) => [t.id, t]));
+
+  // Check scheduled blocks for these tasks
+  const blocks = await prisma.scheduledBlock.findMany({
+    where: { taskId: { in: taskIds } },
+    select: { taskId: true, date: true },
+  });
+  const blockDatesByTask = new Map<string, Set<string>>();
+  for (const b of blocks) {
+    if (b.taskId) {
+      if (!blockDatesByTask.has(b.taskId)) blockDatesByTask.set(b.taskId, new Set());
+      blockDatesByTask.get(b.taskId)!.add(b.date);
+    }
+  }
+
+  let scheduled = 0;
+  let issues = 0;
+
+  for (const gen of generations) {
+    const task = taskMap.get(gen.taskId);
+    if (!task) {
+      issues++; // Task was deleted
+      continue;
+    }
+    if (task.completed) {
+      scheduled++; // Completed = fine
+      continue;
+    }
+    const dates = blockDatesByTask.get(gen.taskId);
+    if (dates && dates.has(gen.date)) {
+      scheduled++;
+    } else {
+      issues++; // Not scheduled on correct day or not scheduled at all
+    }
+  }
+
+  return { generated: true, total: generations.length, scheduled, issues };
 }

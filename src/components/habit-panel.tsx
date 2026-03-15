@@ -4,6 +4,8 @@ import { useState, useEffect, useTransition } from "react";
 import { AppleEmoji } from "@/components/apple-emoji";
 import {
   generateHabitsForWeek,
+  regenerateHabitsForWeek,
+  getHabitsWeekStatus,
   deleteHabit,
   toggleHabitActive,
   createHabit,
@@ -114,11 +116,22 @@ export function HabitPanel({
   const [toast, setToast] = useState<string | null>(null);
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [weekStatus, setWeekStatus] = useState<{
+    generated: boolean;
+    total: number;
+    scheduled: number;
+    issues: number;
+  } | null>(null);
+
+  const refreshStatus = () => {
+    getHabitsWeekStatus().then(setWeekStatus).catch(() => {});
+  };
 
   useEffect(() => {
     if (!isOpen) return;
     fetch("/api/habits").then((r) => r.ok ? r.json() : []).then(setHabits).catch(() => {});
     fetch("/api/projects").then((r) => r.ok ? r.json() : []).then(setProjects).catch(() => {});
+    refreshStatus();
     fetch("/api/habits/review?previous=true")
       .then((r) => r.ok ? r.json() : [])
       .then((items: ReviewItem[]) => {
@@ -141,6 +154,16 @@ export function HabitPanel({
     startGenerate(async () => {
       const count = await generateHabitsForWeek();
       showToast(count > 0 ? `${count} habit${count !== 1 ? "s" : ""} scheduled to your calendar` : "All habits already scheduled this week");
+      refreshStatus();
+      onGenerated?.();
+    });
+  };
+
+  const handleRegenerate = () => {
+    startGenerate(async () => {
+      const count = await regenerateHabitsForWeek();
+      showToast(`${count} habit${count !== 1 ? "s" : ""} regenerated to your calendar`);
+      refreshStatus();
       onGenerated?.();
     });
   };
@@ -204,21 +227,39 @@ export function HabitPanel({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleGenerate}
-              disabled={generating || activeHabits.length === 0}
-              className="rounded-lg px-4 py-2 text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40 transition-colors inline-flex items-center gap-2"
-            >
-              {generating ? (
-                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-              ) : (
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                  <path d="M2 8a6 6 0 0111.5-2.3M14 8a6 6 0 01-11.5 2.3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                  <path d="M14 2v4h-4M2 14v-4h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
-              Generate This Week
-            </button>
+            {weekStatus?.generated && weekStatus.issues > 0 ? (
+              <button
+                onClick={handleRegenerate}
+                disabled={generating || activeHabits.length === 0}
+                className="rounded-lg px-4 py-2 text-sm font-medium bg-amber-600 text-white hover:bg-amber-500 disabled:opacity-40 transition-colors inline-flex items-center gap-2"
+              >
+                {generating ? (
+                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 8a6 6 0 0111.5-2.3M14 8a6 6 0 01-11.5 2.3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                    <path d="M14 2v4h-4M2 14v-4h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+                Regenerate
+              </button>
+            ) : (
+              <button
+                onClick={handleGenerate}
+                disabled={generating || activeHabits.length === 0}
+                className="rounded-lg px-4 py-2 text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40 transition-colors inline-flex items-center gap-2"
+              >
+                {generating ? (
+                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 8a6 6 0 0111.5-2.3M14 8a6 6 0 01-11.5 2.3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                    <path d="M14 2v4h-4M2 14v-4h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+                Generate This Week
+              </button>
+            )}
             <button onClick={onClose} className="text-gray-500 hover:text-gray-300 transition-colors p-1.5 rounded-lg hover:bg-[#2a2a3c]">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -229,6 +270,24 @@ export function HabitPanel({
 
         {/* ── Body ────────────────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+
+          {/* Scheduling issues banner */}
+          {weekStatus?.generated && weekStatus.issues > 0 && (
+            <div className="rounded-xl bg-amber-500/8 border border-amber-500/20 p-4">
+              <div className="flex items-center gap-2">
+                <AppleEmoji emoji="⚠️" size={16} />
+                <span className="text-sm text-amber-300">
+                  {weekStatus.issues} habit{weekStatus.issues !== 1 ? "s" : ""} not scheduled on {weekStatus.issues !== 1 ? "their" : "its"} correct day
+                </span>
+                <span className="text-xs text-gray-600 ml-auto">
+                  {weekStatus.scheduled}/{weekStatus.total} properly scheduled
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 mt-1.5">
+                Tasks may have been deleted or couldn&apos;t fit on their assigned day. Click &quot;Regenerate&quot; above to fix.
+              </p>
+            </div>
+          )}
 
           {/* Review banner */}
           {incompleteReview.length > 0 && (
